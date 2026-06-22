@@ -1,0 +1,69 @@
+# The Human Talisman
+
+An immersive, full-screen website for **The Human Talisman** — manual osteopathy,
+high-grade manual therapy, and movement integration in Winnipeg.
+
+The page is built around a procedural **3D anatomical spine** (Three.js) that
+rotates, repositions and changes camera angle as the visitor scrolls. Every
+major section is linked to a distinct visual state of the spine, with the
+written content layered over a full-screen scene. All content, booking links and
+clinical language are carried verbatim from the source HTML — nothing was
+invented.
+
+## Stack
+
+- **Vite** — dev server + bundler (vanilla ES modules, no framework)
+- **Three.js** — procedural spine + WebGL scene
+- **GSAP + ScrollTrigger** — scroll-linked camera / spine poses
+- **Lenis** — smooth scrolling
+
+## Run it
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+```
+
+Production build + preview:
+
+```bash
+npm run build
+npm run preview  # http://localhost:4173
+```
+
+End-to-end checks (requires a local Chromium for Playwright):
+
+```bash
+npm test
+```
+
+## How the experience is wired
+
+| Section (`data-scene`)        | Spine / camera state                                  |
+|-------------------------------|-------------------------------------------------------|
+| Hero (`hero`)                 | Full column, three-quarter front, slow drift          |
+| Why different (`transition`)  | Rotates to a side profile, eases closer               |
+| The work (`spine`)            | Close on the column, thoracic region highlighted      |
+| A session (`gait`)            | Side, lowered to the lumbar/sacrum, highlighted        |
+| Approach / About (`heart`)    | Centred on the thoracic spine, front                  |
+| Locations / Book (`return`)   | Upright, full column, calm                            |
+| FAQ (`low`)                   | Pulled back and dimmed                                 |
+
+Poses live in `src/scroll.js` (`SCENES`). The spine itself is generated in
+`src/spine.js`; the renderer/camera/lighting and the frame-rate watchdog are in
+`src/scene.js`.
+
+## Resilience
+
+- **Reduced motion** — `prefers-reduced-motion` disables smooth scroll and
+  scroll-scrubbing and renders the spine as a single static frame.
+- **No WebGL** — falls back to the brand photographic backdrop; all content and
+  booking links remain fully functional.
+- **Low performance** — a frame-rate watchdog first drops the pixel ratio, then,
+  if still slow, hands off to the static backdrop.
+- **Lost WebGL context** — caught at runtime and degraded to the static backdrop.
+- A 6-second safety timer guarantees the loader is removed even if 3D never
+  initialises.
+
+The original uploaded file is kept for reference at
+[`reference/sample-source.html`](reference/sample-source.html).
