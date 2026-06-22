@@ -1,305 +1,402 @@
 import * as THREE from 'three';
 
 /**
- * The centrepiece: the glowing human figure inside a circular electromagnetic
- * (torus) field. It is driven by four supplied photographs — one per pose —
- * that the visitor scrolls through in order:
+ * Scroll-controlled cinematic figure sequence.
  *
- *     /field/pose-1.jpg   side profile
- *     /field/pose-2.jpg   rear view, arms at sides
- *     /field/pose-3.jpg   front view
- *     /field/pose-4.jpg   Vitruvian (arms / legs spread)
+ * Four supplied photographs are shown one at a time inside a single full-screen
+ * canvas, in this order:  front → side → back → davinci.
  *
- * As scroll progress runs 0 → 1 the figure and field rotate to each assigned
- * pose with a flowing cross-fade (plus a subtle field shimmer). The images are
- * shown "contained" on black, so the dark margins are invisible against the
- * scene background.
+ * Each transition is a noise-based particle dissolve, never a crossfade and
+ * never two figures at once:
+ *   1. hold the current pose (gentle heart pulse)
+ *   2. heart glow swells
+ *   3. the figure + field erode into fine orange particles (noise threshold)
+ *   4. a dark midpoint — only flowing particles and a faint central light
+ *   5. the next pose re-forms from the particles
+ *   6. it settles into sharp focus
  *
- * If a photo is missing, a clearly-labelled placeholder is generated so the
- * motion is visible — replace the files in public/field/ with the real art.
+ * The figure quad shows the active pose sharply at rest; a GPU particle field,
+ * seeded from the SAME single texture, carries the dissolve. At the transition
+ * midpoint the active texture (and its normalisation + heart anchor) is swapped,
+ * so only one figure is ever sampled.
  */
 
-export const POSE_URLS = [
-  '/field/pose-1.webp',
-  '/field/pose-2.webp',
-  '/field/pose-3.webp',
-  '/field/pose-4.webp',
+// Order requested by the client. Normalisation (scale / offset / heart) keeps
+// the heart, feet, body scale and surrounding field centred consistently.
+const POSES = [
+  { url: '/field/pose-3.webp', name: 'front', scale: 1.0, offset: [0.0, 0.0], heart: [0.5, 0.455] },
+  { url: '/field/pose-1.webp', name: 'side', scale: 1.0, offset: [0.0, 0.0], heart: [0.5, 0.45] },
+  { url: '/field/pose-2.webp', name: 'back', scale: 0.9, offset: [0.0, 0.0], heart: [0.5, 0.47] },
+  { url: '/field/pose-4.webp', name: 'davinci', scale: 1.03, offset: [0.0, 0.02], heart: [0.5, 0.45] },
 ];
 
-const POSE_LABELS = ['SIDE PROFILE', 'REAR VIEW', 'FRONT VIEW', 'VITRUVIAN'];
+export const POSE_COUNT = POSES.length;
 
-/** Draw a labelled placeholder pose (glowing humanoid + torus rings on black). */
-function placeholderTexture(index) {
-  const w = 720;
-  const h = 1280;
+function placeholderTexture(index, label) {
+  const w = 720, h = 1280;
   const c = document.createElement('canvas');
-  c.width = w;
-  c.height = h;
+  c.width = w; c.height = h;
   const g = c.getContext('2d');
-  g.fillStyle = '#050301';
-  g.fillRect(0, 0, w, h);
-
-  const cx = w / 2;
-  const cy = h / 2;
-
-  // Torus field rings.
-  g.save();
-  g.translate(cx, cy);
+  g.fillStyle = '#050301'; g.fillRect(0, 0, w, h);
+  g.translate(w / 2, h / 2);
   for (let i = 0; i < 14; i++) {
-    const rx = 90 + i * 22;
-    const ry = 150 + i * 34;
-    const a = 0.16 - i * 0.008;
-    g.strokeStyle = `rgba(246,140,40,${Math.max(a, 0.02)})`;
-    g.lineWidth = 1.4;
-    g.beginPath();
-    g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    g.stroke();
+    g.strokeStyle = `rgba(246,140,40,${Math.max(0.16 - i * 0.008, 0.02)})`;
+    g.lineWidth = 1.4; g.beginPath();
+    g.ellipse(0, 0, 90 + i * 22, 150 + i * 34, 0, 0, Math.PI * 2); g.stroke();
   }
-  // Pole flares.
-  const flare = g.createRadialGradient(0, -ry(), 0, 0, -ry(), 120);
-  function ry() { return 150 + 13 * 34; }
-  flare.addColorStop(0, 'rgba(255,200,90,0.5)');
-  flare.addColorStop(1, 'rgba(255,200,90,0)');
-  g.fillStyle = flare;
-  g.beginPath();
-  g.arc(0, -ry(), 120, 0, Math.PI * 2);
-  g.fill();
-  g.beginPath();
-  g.arc(0, ry(), 120, 0, Math.PI * 2);
-  g.fill();
-  g.restore();
-
-  // Glowing humanoid silhouette, varied per pose.
-  g.save();
-  g.translate(cx, cy);
-  g.shadowColor = 'rgba(255,180,70,0.9)';
-  g.shadowBlur = 28;
-  g.strokeStyle = 'rgba(255,205,120,0.95)';
-  g.fillStyle = 'rgba(255,190,90,0.5)';
-  g.lineWidth = 14;
-  g.lineCap = 'round';
-  const head = -250;
-  // Head
-  g.beginPath();
-  g.arc(0, head, 30, 0, Math.PI * 2);
-  g.fill();
-  // Torso
-  g.beginPath();
-  g.moveTo(0, head + 30);
-  g.lineTo(0, 120);
-  g.stroke();
-  if (index === 3) {
-    // Vitruvian: arms + legs spread.
-    g.beginPath(); g.moveTo(0, -120); g.lineTo(-180, -200); g.moveTo(0, -120); g.lineTo(180, -200);
-    g.moveTo(0, -90); g.lineTo(-200, -60); g.moveTo(0, -90); g.lineTo(200, -60);
-    g.moveTo(0, 120); g.lineTo(-150, 320); g.moveTo(0, 120); g.lineTo(150, 320); g.stroke();
-  } else if (index === 0) {
-    // Side profile: arms/legs together, slight offset.
-    g.beginPath(); g.moveTo(0, -120); g.lineTo(40, 40); g.moveTo(0, 120); g.lineTo(20, 330); g.stroke();
-  } else {
-    // Front / rear: arms down, legs together.
-    g.beginPath(); g.moveTo(0, -120); g.lineTo(-70, 70); g.moveTo(0, -120); g.lineTo(70, 70);
-    g.moveTo(0, 120); g.lineTo(-45, 330); g.moveTo(0, 120); g.lineTo(45, 330); g.stroke();
-  }
-  // Heart spark.
-  const spark = g.createRadialGradient(0, -60, 0, 0, -60, 60);
-  spark.addColorStop(0, 'rgba(255,240,200,0.95)');
-  spark.addColorStop(1, 'rgba(255,200,90,0)');
-  g.fillStyle = spark;
-  g.shadowBlur = 0;
-  g.beginPath(); g.arc(0, -60, 60, 0, Math.PI * 2); g.fill();
-  g.restore();
-
-  // Label.
-  g.fillStyle = 'rgba(255,210,140,0.85)';
-  g.font = '600 26px ui-monospace, monospace';
-  g.textAlign = 'center';
-  g.fillText(`POSE ${index + 1} · ${POSE_LABELS[index]}`, cx, h - 90);
-  g.fillStyle = 'rgba(204,181,154,0.7)';
-  g.font = '18px ui-monospace, monospace';
-  g.fillText('PLACEHOLDER — replace in public/field/', cx, h - 58);
-
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  g.shadowColor = 'rgba(255,180,70,0.9)'; g.shadowBlur = 28;
+  g.strokeStyle = 'rgba(255,205,120,0.95)'; g.lineWidth = 14; g.lineCap = 'round';
+  g.beginPath(); g.arc(0, -250, 30, 0, Math.PI * 2); g.stroke();
+  g.beginPath(); g.moveTo(0, -220); g.lineTo(0, 120); g.stroke();
+  g.beginPath(); g.moveTo(0, -120); g.lineTo(-70, 70); g.moveTo(0, -120); g.lineTo(70, 70);
+  g.moveTo(0, 120); g.lineTo(-45, 330); g.moveTo(0, 120); g.lineTo(45, 330); g.stroke();
+  g.shadowBlur = 0; g.fillStyle = 'rgba(255,210,140,0.85)';
+  g.font = '600 26px ui-monospace, monospace'; g.textAlign = 'center';
+  g.fillText(`POSE ${index + 1} · ${label.toUpperCase()}`, 0, h / 2 - 120);
+  g.fillText('PLACEHOLDER', 0, h / 2 - 84);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
-/** Load the four pose photographs; substitute a labelled placeholder if missing. */
-export async function loadPoseTextures() {
+export async function loadPoseTextures(renderer) {
   const loader = new THREE.TextureLoader();
+  const maxAniso = renderer ? renderer.capabilities.getMaxAnisotropy() : 1;
   const load = (url) =>
     new Promise((resolve) => {
-      loader.load(
-        url,
-        (t) => { t.colorSpace = THREE.SRGBColorSpace; resolve({ tex: t, real: true }); },
-        undefined,
-        () => resolve(null)
-      );
+      loader.load(url, (t) => resolve(t), undefined, () => resolve(null));
     });
-
-  const results = await Promise.all(POSE_URLS.map(load));
-  let placeholders = 0;
-  const textures = results.map((r, i) => {
-    if (r && r.real) return r.tex;
-    placeholders++;
-    return placeholderTexture(i);
+  const raw = await Promise.all(POSES.map((p) => load(p.url)));
+  let missing = 0;
+  const textures = raw.map((t, i) => {
+    if (!t) { missing++; t = placeholderTexture(i, POSES[i].name); }
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.anisotropy = maxAniso;
+    t.generateMipmaps = true;
+    return t;
   });
-  return { textures, usingPlaceholders: placeholders > 0, missing: placeholders };
+  return { textures, meta: POSES, usingPlaceholders: missing > 0, missing };
 }
 
-const VERT = /* glsl */ `
+const NOISE = /* glsl */ `
+  vec3 hash3(vec3 p){
+    p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6)));
+    return fract(sin(p)*43758.5453123);
+  }
+  float noise(vec3 p){
+    vec3 i = floor(p); vec3 f = fract(p); f = f*f*(3.0-2.0*f);
+    float n = mix(mix(mix(dot(hash3(i+vec3(0,0,0))-0.5,f-vec3(0,0,0)),
+                          dot(hash3(i+vec3(1,0,0))-0.5,f-vec3(1,0,0)),f.x),
+                      mix(dot(hash3(i+vec3(0,1,0))-0.5,f-vec3(0,1,0)),
+                          dot(hash3(i+vec3(1,1,0))-0.5,f-vec3(1,1,0)),f.x),f.y),
+                  mix(mix(dot(hash3(i+vec3(0,0,1))-0.5,f-vec3(0,0,1)),
+                          dot(hash3(i+vec3(1,0,1))-0.5,f-vec3(1,0,1)),f.x),
+                      mix(dot(hash3(i+vec3(0,1,1))-0.5,f-vec3(0,1,1)),
+                          dot(hash3(i+vec3(1,1,1))-0.5,f-vec3(1,1,1)),f.x),f.y),f.z);
+    return n*0.5+0.5;
+  }
+`;
+
+// ---- Figure quad: shows the active pose, dissolving via a noise threshold ----
+const QUAD_VERT = /* glsl */ `
   varying vec2 vUv;
   void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 
-const FRAG = /* glsl */ `
+const QUAD_FRAG = /* glsl */ `
   precision highp float;
   varying vec2 vUv;
-  uniform sampler2D uTexA;
-  uniform sampler2D uTexB;
-  uniform float uMix;
+  uniform sampler2D uTex;
+  uniform vec2 uImg;        // imageAspect, screenAspect
+  uniform float uScale;     // per-pose normalisation
+  uniform vec2 uOffset;
+  uniform vec2 uHeart;      // heart uv in image space
+  uniform float uDissolve;  // 0 solid -> 1 gone
+  uniform float uHeartGlow; // additive heart light
+  uniform float uDOF;       // transition blur amount
   uniform float uTime;
   uniform float uReduced;
-  uniform vec2 uAspectA; // imageAspect, screenAspect
-  uniform vec2 uAspectB;
+  ${NOISE}
 
-  // Contain-fit: keep the whole portrait visible, black (=invisible) margins.
-  vec4 sampleContain(sampler2D tex, vec2 uv, float imgA, float scrA, float t){
+  vec2 toImg(vec2 uv){
     vec2 p = uv - 0.5;
-    if(scrA > imgA){ p.x *= scrA / imgA; } else { p.y *= imgA / scrA; }
-    p *= 0.88; // slight zoom so the figure + torus read larger
-    // Subtle field shimmer: swirl that grows toward the centre.
+    if(uImg.y > uImg.x){ p.x *= uImg.y / uImg.x; } else { p.y *= uImg.x / uImg.y; }
+    p *= 0.9 * uScale;
+    p += uOffset;
     if(uReduced < 0.5){
       float r = length(p);
-      float ang = 0.012 * sin(uTime*0.6 + r*7.0) * smoothstep(0.55, 0.0, r);
-      float s = sin(ang), c = cos(ang);
-      p = mat2(c,-s,s,c) * p;
+      float a = 0.01 * sin(uTime*0.5 + r*6.0) * smoothstep(0.6,0.0,r);
+      float s=sin(a), c=cos(a); p = mat2(c,-s,s,c)*p;
     }
-    vec2 iuv = p + 0.5;
-    if(iuv.x < 0.0 || iuv.x > 1.0 || iuv.y < 0.0 || iuv.y > 1.0) return vec4(0.0);
-    return texture2D(tex, iuv);
+    return p + 0.5;
+  }
+
+  vec3 sampleImg(vec2 iuv){
+    if(iuv.x<0.0||iuv.x>1.0||iuv.y<0.0||iuv.y>1.0) return vec3(0.0);
+    return texture2D(uTex, iuv).rgb;
   }
 
   void main(){
-    vec4 a = sampleContain(uTexA, vUv, uAspectA.x, uAspectA.y, uTime);
-    vec4 b = sampleContain(uTexB, vUv, uAspectB.x, uAspectB.y, uTime);
-    vec3 col = mix(a.rgb, b.rgb, uMix);
-    col *= 1.18; // lift the figure / field glow
-    gl_FragColor = vec4(col, 1.0);
+    vec2 iuv = toImg(vUv);
+    // Mild depth-of-field during transitions (cheap 5-tap).
+    vec3 col;
+    if(uDOF > 0.001 && uReduced < 0.5){
+      float b = uDOF * 0.006;
+      col  = sampleImg(iuv);
+      col += sampleImg(iuv + vec2(b,0.0));
+      col += sampleImg(iuv + vec2(-b,0.0));
+      col += sampleImg(iuv + vec2(0.0,b));
+      col += sampleImg(iuv + vec2(0.0,-b));
+      col /= 5.0;
+    } else {
+      col = sampleImg(iuv);
+    }
+
+    // Noise dissolve: erode the figure where the threshold passes the noise.
+    float n = noise(vec3(iuv * 7.0, uTime * 0.05));
+    float n2 = noise(vec3(iuv * 22.0, uTime * 0.1));
+    float fld = n * 0.7 + n2 * 0.3;
+    float thr = uDissolve * 1.12 - 0.06;
+    float vis = smoothstep(thr, thr + 0.10, fld);
+    // Burning edge glow as it dissolves.
+    float edge = smoothstep(thr - 0.04, thr, fld) * (1.0 - vis);
+    vec3 ember = vec3(1.0, 0.55, 0.18) * edge * 1.6 * step(0.02, uDissolve);
+
+    // Heart light.
+    float hr = length((iuv - uHeart) * vec2(uImg.x/uImg.y < 1.0 ? 1.0 : 1.0, 1.0));
+    float heart = exp(-hr * hr * 26.0) * uHeartGlow;
+    vec3 heartCol = vec3(1.0, 0.78, 0.4) * heart;
+
+    vec3 outc = col * vis + ember + heartCol;
+    gl_FragColor = vec4(outc, 1.0);
   }
 `;
 
-export function createField(textures, { reducedMotion }) {
-  const group = new THREE.Group();
+// ---- Particle field: seeded from the SAME texture, carries the dissolve ----
+const P_VERT = /* glsl */ `
+  precision highp float;
+  attribute vec2 aUv;
+  attribute float aSeed;
+  uniform sampler2D uTex;
+  uniform vec2 uImg;
+  uniform float uScale;
+  uniform vec2 uOffset;
+  uniform float uActivity;  // 0 at rest -> 1 mid-transition
+  uniform float uTime;
+  uniform float uDpr;
+  varying float vA;
+  ${NOISE}
+  vec2 toImg(vec2 uv){
+    vec2 p = uv - 0.5;
+    if(uImg.y > uImg.x){ p.x *= uImg.y / uImg.x; } else { p.y *= uImg.x / uImg.y; }
+    p *= 0.9 * uScale; p += uOffset; return p + 0.5;
+  }
+  void main(){
+    vec2 iuv = toImg(aUv);
+    vec3 c = vec3(0.0);
+    if(iuv.x>=0.0 && iuv.x<=1.0 && iuv.y>=0.0 && iuv.y<=1.0) c = texture2D(uTex, iuv).rgb;
+    float lum = max(c.r, max(c.g, c.b));
+    // Position in clip space from the grid uv.
+    vec2 ndc = (aUv - 0.5) * 2.0;
+    // Disperse: curl-ish flow upward + outward, peaking mid-transition.
+    float t = uTime * 0.25 + aSeed * 6.2831;
+    vec3 fl = vec3(noise(vec3(aUv*4.0, uTime*0.2+aSeed)) - 0.5,
+                   noise(vec3(aUv*4.0+19.0, uTime*0.2+aSeed)) - 0.5, 0.0);
+    float disp = uActivity;
+    ndc += fl.xy * disp * 1.1;
+    ndc.y += disp * (0.12 + aSeed * 0.3); // rise
+    gl_Position = vec4(ndc, 0.0, 1.0);
+    gl_PointSize = (lum * 2.4 + 0.6) * uDpr * (0.6 + disp * 1.1);
+    // Only visible during transition, weighted by the figure's brightness.
+    vA = lum * smoothstep(0.0, 0.25, uActivity) * (1.0 - smoothstep(0.85, 1.0, uActivity)*0.2);
+  }
+`;
+const P_FRAG = /* glsl */ `
+  precision highp float;
+  varying float vA;
+  void main(){
+    vec2 d = gl_PointCoord - 0.5;
+    float m = smoothstep(0.5, 0.0, length(d));
+    if(vA < 0.01) discard;
+    gl_FragColor = vec4(1.0, 0.66, 0.28, vA * m);
+  }
+`;
 
-  const uniforms = {
-    uTexA: { value: textures[0] },
-    uTexB: { value: textures[1] },
-    uMix: { value: 0 },
+function aspectOf(tex) {
+  const img = tex.image;
+  if (img && img.width && img.height) return img.width / img.height;
+  return 0.58;
+}
+
+export function createField(textures, meta, { reducedMotion, renderer }) {
+  const group = new THREE.Group();
+  const screenAspect = window.innerWidth / window.innerHeight;
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+
+  const quadU = {
+    uTex: { value: textures[0] },
+    uImg: { value: new THREE.Vector2(aspectOf(textures[0]), screenAspect) },
+    uScale: { value: meta[0].scale },
+    uOffset: { value: new THREE.Vector2(meta[0].offset[0], meta[0].offset[1]) },
+    uHeart: { value: new THREE.Vector2(meta[0].heart[0], meta[0].heart[1]) },
+    uDissolve: { value: 0 },
+    uHeartGlow: { value: 0.0 },
+    uDOF: { value: 0 },
     uTime: { value: 0 },
     uReduced: { value: reducedMotion ? 1 : 0 },
-    uAspectA: { value: new THREE.Vector2(aspectOf(textures[0]), 1) },
-    uAspectB: { value: new THREE.Vector2(aspectOf(textures[1]), 1) },
   };
-
-  const mat = new THREE.ShaderMaterial({
-    vertexShader: VERT,
-    fragmentShader: FRAG,
-    uniforms,
-    depthTest: false,
-    depthWrite: false,
-  });
-  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), mat);
+  const quad = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    new THREE.ShaderMaterial({ vertexShader: QUAD_VERT, fragmentShader: QUAD_FRAG, uniforms: quadU, depthTest: false, depthWrite: false })
+  );
   quad.frustumCulled = false;
   group.add(quad);
 
-  // Drifting ember particles (additive) for life over the field.
-  const COUNT = reducedMotion ? 0 : 140;
+  // Particle grid.
   let points = null;
-  if (COUNT > 0) {
-    const pos = new Float32Array(COUNT * 3);
-    const seed = new Float32Array(COUNT);
-    for (let i = 0; i < COUNT; i++) {
-      pos[i * 3] = (Math.random() * 2 - 1);
-      pos[i * 3 + 1] = (Math.random() * 2 - 1);
-      pos[i * 3 + 2] = 0;
-      seed[i] = Math.random();
+  const pU = {
+    uTex: { value: textures[0] },
+    uImg: { value: new THREE.Vector2(aspectOf(textures[0]), screenAspect) },
+    uScale: { value: meta[0].scale },
+    uOffset: { value: new THREE.Vector2(meta[0].offset[0], meta[0].offset[1]) },
+    uActivity: { value: 0 },
+    uTime: { value: 0 },
+    uDpr: { value: dpr },
+  };
+  if (!reducedMotion) {
+    const COLS = window.innerWidth < 760 ? 110 : 170;
+    const ROWS = window.innerWidth < 760 ? 170 : 260;
+    const n = COLS * ROWS;
+    const uvs = new Float32Array(n * 2);
+    const seeds = new Float32Array(n);
+    let k = 0;
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        uvs[k * 2] = (x + 0.5) / COLS;
+        uvs[k * 2 + 1] = (y + 0.5) / ROWS;
+        seeds[k] = Math.random();
+        k++;
+      }
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+    geo.setAttribute('aUv', new THREE.BufferAttribute(uvs, 2));
+    geo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
     const pMat = new THREE.ShaderMaterial({
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      uniforms: { uTime: { value: 0 } },
-      vertexShader: /* glsl */ `
-        attribute float aSeed; varying float vA; uniform float uTime;
-        void main(){
-          vec3 p = position;
-          float t = uTime * (0.05 + aSeed*0.08);
-          p.y = mod(p.y + t, 2.0) - 1.0;
-          p.x += sin(uTime*0.3 + aSeed*6.28) * 0.04;
-          vA = 0.25 + 0.6 * aSeed;
-          gl_Position = vec4(p.xy, 0.0, 1.0);
-          gl_PointSize = (1.0 + aSeed*2.2);
-        }`,
-      fragmentShader: /* glsl */ `
-        varying float vA;
-        void main(){
-          vec2 d = gl_PointCoord - 0.5;
-          float m = smoothstep(0.5, 0.0, length(d));
-          gl_FragColor = vec4(1.0, 0.72, 0.32, vA*m);
-        }`,
+      vertexShader: P_VERT, fragmentShader: P_FRAG, uniforms: pU,
+      transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     points = new THREE.Points(geo, pMat);
     points.frustumCulled = false;
     group.add(points);
   }
 
-  function setScreenAspect(a) {
-    uniforms.uAspectA.value.y = a;
-    uniforms.uAspectB.value.y = a;
+  let activeIndex = 0;
+  function setActiveTexture(i) {
+    if (i === activeIndex) return;
+    activeIndex = i;
+    const m = meta[i];
+    quadU.uTex.value = textures[i];
+    quadU.uImg.value.x = aspectOf(textures[i]);
+    quadU.uScale.value = m.scale;
+    quadU.uOffset.value.set(m.offset[0], m.offset[1]);
+    quadU.uHeart.value.set(m.heart[0], m.heart[1]);
+    pU.uTex.value = textures[i];
+    pU.uImg.value.x = aspectOf(textures[i]);
+    pU.uScale.value = m.scale;
+    pU.uOffset.value.set(m.offset[0], m.offset[1]);
   }
 
-  /** progress 0..1 maps across the four poses in order. */
+  function setScreenAspect(a) {
+    quadU.uImg.value.y = a;
+    pU.uImg.value.y = a;
+  }
+
+  /**
+   * progress 0..1 across the whole sequence. Each pose holds, then a particle
+   * transition runs to the next. State: which texture is active, dissolve,
+   * heart glow, DOF, particle activity.
+   */
   function setProgress(progress) {
     const p = Math.min(1, Math.max(0, progress));
-    const seg = p * (textures.length - 1);
-    const i = Math.min(textures.length - 2, Math.floor(seg));
-    const f = seg - i;
-    if (uniforms.uTexA.value !== textures[i]) {
-      uniforms.uTexA.value = textures[i];
-      uniforms.uAspectA.value.x = aspectOf(textures[i]);
+    const seg = p * (POSES.length - 1); // 0..3
+    const i = Math.min(POSES.length - 2, Math.floor(seg));
+    const f = seg - i; // 0..1 within this pair
+
+    // Hold bands at the ends, transition in the middle.
+    const HOLD = 0.32;
+    let dissolve = 0, activity = 0, dof = 0, heartBase = 0.0;
+    if (f < HOLD) {
+      setActiveTexture(i);
+      dissolve = 0; activity = 0; dof = 0;
+    } else if (f > 1 - HOLD) {
+      setActiveTexture(i + 1);
+      dissolve = 0; activity = 0; dof = 0;
+    } else {
+      const lt = (f - HOLD) / (1 - 2 * HOLD); // 0..1 across the transition
+      // Swap the active texture at the midpoint so only one figure shows.
+      if (lt < 0.5) {
+        setActiveTexture(i);
+        dissolve = lt * 2.0; // 0 -> 1
+      } else {
+        setActiveTexture(i + 1);
+        dissolve = (1.0 - lt) * 2.0; // 1 -> 0
+      }
+      const bell = Math.sin(Math.PI * lt);
+      activity = bell;
+      dof = bell;
+      heartBase = 0.6 * Math.max(0, 1 - Math.abs(lt - 0.18) * 6); // swell just before dissolve
     }
-    if (uniforms.uTexB.value !== textures[i + 1]) {
-      uniforms.uTexB.value = textures[i + 1];
-      uniforms.uAspectB.value.x = aspectOf(textures[i + 1]);
-    }
-    uniforms.uMix.value = smooth(f);
+
+    quadU.uDissolve.value = dissolve;
+    quadU.uDOF.value = dof;
+    pU.uActivity.value = activity;
+    quadU._heartBase = heartBase;
+    quadU._holding = f < HOLD || f > 1 - HOLD;
+  }
+
+  // Intro ignition: heart lights from 0, particles rise. Driven externally.
+  function setIntro(v) {
+    quadU._intro = v; // 0..1
   }
 
   function update(time) {
-    uniforms.uTime.value = time;
-    if (points) points.material.uniforms.uTime.value = time;
+    quadU.uTime.value = time;
+    pU.uTime.value = time;
+    // Heart pulse while holding + transition swell + intro ignition.
+    const pulse = 0.18 + 0.07 * Math.sin(time * 1.7);
+    const hold = quadU._holding ? pulse : (quadU._heartBase || 0);
+    const intro = quadU._intro != null ? quadU._intro : 1;
+    quadU.uHeartGlow.value = Math.max(hold, quadU._heartBase || 0) * intro;
+  }
+
+  function heartScreenPos() {
+    // Convert active heart uv to screen-space 0..1 for the god-ray pass.
+    const m = meta[activeIndex];
+    const imgA = aspectOf(textures[activeIndex]);
+    const scrA = quadU.uImg.value.y;
+    let px = (m.heart[0] - 0.5), py = (m.heart[1] - 0.5);
+    // invert toImg mapping (no swirl): p = (uv-0.5)*scaleFactor + offset
+    px -= m.offset[0]; py -= m.offset[1];
+    px /= 0.9 * m.scale; py /= 0.9 * m.scale;
+    if (scrA > imgA) px *= imgA / scrA; else py *= imgA / scrA;
+    return new THREE.Vector2(px + 0.5, 1.0 - (py + 0.5));
   }
 
   function dispose() {
     quad.geometry.dispose();
-    mat.dispose();
+    quad.material.dispose();
     if (points) { points.geometry.dispose(); points.material.dispose(); }
   }
 
-  return { group, setProgress, setScreenAspect, update, dispose };
-}
+  function getActivity() { return pU.uActivity.value; }
+  function getHeartGlow() { return quadU.uHeartGlow.value; }
 
-function aspectOf(tex) {
-  const img = tex.image;
-  if (img && img.width && img.height) return img.width / img.height;
-  return 0.5625; // default portrait 9:16
-}
-
-function smooth(t) {
-  return t * t * (3 - 2 * t);
+  return {
+    group, setProgress, setScreenAspect, setIntro, update, heartScreenPos, dispose,
+    getActivity, getHeartGlow,
+    get activeIndex() { return activeIndex; },
+  };
 }

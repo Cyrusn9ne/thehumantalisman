@@ -214,3 +214,34 @@ footer{padding:48px 18px calc(52px + env(safe-area-inset-bottom));border-top:1px
 }
 
 .scroll-progress{position:fixed;left:0;top:0;height:2px;width:0;background:linear-gradient(90deg,var(--ember),var(--gold));z-index:100;box-shadow:0 0 18px rgba(255,192,90,.55)}
+
+/* ---- Offset content panels to alternating sides, clear central channel ---- */
+/* Each .wrap is a container so its grids collapse to the narrow panel width. */
+.wrap{container-type:inline-size}
+@container (max-width:760px){
+  .grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid-3{grid-template-columns:1fr}
+  .services,.locations{grid-template-columns:1fr}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .split-head{flex-direction:column;align-items:flex-start}
+}
+@container (max-width:480px){
+  .grid-4,.steps{grid-template-columns:1fr}
+}
+@media (min-width:1100px){
+  /* Keep a central channel for the glowing figure; panels hug the sides. */
+  main > section.section > .wrap{max-width:min(46vw,500px);margin:0}
+  main > section.section:nth-of-type(odd) > .wrap{margin-right:auto;margin-left:3.5vw}
+  main > section.section:nth-of-type(even) > .wrap{margin-left:auto;margin-right:3.5vw}
+}
+
+/* ---- Preloader ignition: energy rises from the feet, heart ignites ---- */
+.loader-rise{position:absolute;left:50%;bottom:0;top:0;width:3px;transform:translateX(-50%);
+  background:linear-gradient(180deg, rgba(255,192,90,0) 0%, rgba(255,192,90,.0) 55%, rgba(246,171,51,.9) 100%);
+  filter:blur(1px);animation:riseBeam 1.8s ease-in-out infinite}
+@keyframes riseBeam{0%{opacity:0;transform:translateX(-50%) scaleY(.2);transform-origin:bottom}
+  40%{opacity:1}100%{opacity:0;transform:translateX(-50%) scaleY(1);transform-origin:bottom}}
+.loader-mark span{animation:ignite 1.8s ease-in-out infinite}
+@keyframes ignite{0%,30%{transform:scale(.6);opacity:.3;box-shadow:0 0 6px var(--amber)}
+  70%{transform:scale(1.5);opacity:1;box-shadow:0 0 40px var(--gold),0 0 80px var(--amber)}
+  100%{transform:scale(1);opacity:.8}}

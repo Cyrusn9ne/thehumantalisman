@@ -78,6 +78,12 @@ async function boot() {
     scroll = initScroll(scene, { reducedMotion });
     scene.start();
 
+    // Intro ignition: energy rises and the heart lights up.
+    if (!reducedMotion) {
+      const { gsap } = await import('gsap');
+      gsap.fromTo(scene.state, { intro: 0 }, { intro: 1, duration: 1.9, ease: 'power2.out' });
+    }
+
     // Keep ScrollTrigger measurements correct after fonts/layout settle.
     window.addEventListener('load', () => scroll.refresh && scroll.refresh());
     setTimeout(() => scroll.refresh && scroll.refresh(), 400);

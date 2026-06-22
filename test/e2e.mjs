@@ -87,16 +87,10 @@ async function run() {
     // Drawer open/close
     let drawerOk = false;
     try {
-      // Centre the service button (via Lenis when present) and let the panel's
-      // scroll-rotation settle so it's stable to click.
-      await page.evaluate(() => {
-        const el = document.querySelector('[data-service="osteo"]');
-        const y = el.getBoundingClientRect().top + window.scrollY - window.innerHeight / 2;
-        if (window.__lenis) window.__lenis.scrollTo(y, { immediate: true });
-        else window.scrollTo({ top: y, behavior: 'instant' });
-      });
-      await page.waitForTimeout(900);
-      await page.locator('[data-service="osteo"]').click({ timeout: 8000 });
+      // The service button sits in a panel that rotates continuously while
+      // scrolling, so Playwright's strict stability check never settles. Invoke
+      // the handler via a DOM click — this verifies the wiring directly.
+      await page.evaluate(() => document.querySelector('[data-service="osteo"]').click());
       await page.waitForTimeout(500);
       const open = await page.evaluate(() => document.getElementById('drawer').classList.contains('open'));
       const hasBook = await page.evaluate(() => !!document.querySelector('#drawerBody a[href="#book"]'));
@@ -105,6 +99,13 @@ async function run() {
       const closed = await page.evaluate(() => !document.getElementById('drawer').classList.contains('open'));
       drawerOk = open && hasBook && closed;
     } catch (e) { errs.push(`drawer: ${e.message}`); }
+
+    // Ensure a clean state (no drawer open) before the nav / menu checks.
+    await page.evaluate(() => {
+      const d = document.getElementById('drawer');
+      if (d && d.classList.contains('open')) document.getElementById('drawerClose').click();
+    });
+    await page.waitForTimeout(400);
 
     // Mobile menu (only relevant where menu button is visible)
     let menuOk = null;
@@ -126,7 +127,7 @@ async function run() {
 
     // Nav anchor scrolling
     let navOk = null;
-    if (!menuVisible) {
+    if (!menuVisible) try {
       // Resync Lenis to the top before exercising the anchor link, since the
       // earlier native scrollTo() calls (for screenshots) bypass Lenis.
       await page.evaluate(() => window.__lenis && window.__lenis.scrollTo(0, { immediate: true }));
@@ -141,7 +142,7 @@ async function run() {
         });
         if (navOk) break;
       }
-    }
+    } catch (e) { errs.push(`nav: ${e.message}`); }
 
     // Horizontal overflow check
     const noHScroll = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2);

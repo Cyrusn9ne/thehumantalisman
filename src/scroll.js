@@ -5,16 +5,15 @@ import Lenis from 'lenis';
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Scroll wiring.
+ * Scroll wiring for the figure sequence.
  *
- * The figure + electromagnetic field is driven by overall scroll progress
- * (0 → 1), cross-fading through the four poses in order:
- *   side profile → rear view → front view → Vitruvian.
- *
- * Content panels additionally rotate in 3D as they pass, swinging in sympathy
- * with the field. Under reduced motion there is no smooth scroll or scrubbing;
- * the pose still updates on native scroll via single-frame renders.
+ * Overall scroll progress (0 → 1) drives the four-pose sequence (front → side →
+ * back → davinci). A soft snap gently settles onto a pose only when the reader
+ * stops very near one of the four anchor points, so reading the content in
+ * between is never hijacked. Content panels also rotate in 3D as they pass.
  */
+const POSE_POINTS = [0, 1 / 3, 2 / 3, 1];
+
 export function initScroll(scene, { reducedMotion = false } = {}) {
   const sections = Array.from(document.querySelectorAll('[data-scene]'));
   const progressBar = document.getElementById('scrollProgress');
@@ -46,62 +45,64 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
 
   lenis.on('scroll', ScrollTrigger.update);
   lenis.on('scroll', ({ progress }) => setProgress(progress));
-
   gsap.ticker.add((time) => lenis.raf(time * 1000));
   gsap.ticker.lagSmoothing(0);
-
-  // Expose the smooth-scroll instance for debugging and automated tests.
   window.__lenis = lenis;
 
-  // Active-nav highlighting as each target section passes the viewport centre.
+  // ---- Soft snap: settle onto a pose only when stopped very near one ----
+  let snapTimer;
+  let snapping = false;
+  const trySnap = () => {
+    if (snapping) return;
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    if (max <= 0) return;
+    const p = window.scrollY / max;
+    let nearest = POSE_POINTS[0];
+    for (const pt of POSE_POINTS) if (Math.abs(pt - p) < Math.abs(nearest - p)) nearest = pt;
+    if (Math.abs(nearest - p) < 0.045 && Math.abs(nearest - p) > 0.002) {
+      snapping = true;
+      lenis.scrollTo(nearest * max, {
+        duration: 0.7,
+        easing: (t) => 1 - Math.pow(1 - t, 3),
+        onComplete: () => { snapping = false; },
+      });
+    }
+  };
+  lenis.on('scroll', () => { clearTimeout(snapTimer); snapTimer = setTimeout(trySnap, 170); });
+
+  // Active-nav highlighting.
   sections.forEach((section) => {
     if (!section.id) return;
     ScrollTrigger.create({
-      trigger: section,
-      start: 'top center',
-      end: 'bottom center',
+      trigger: section, start: 'top center', end: 'bottom center',
       onToggle: (self) => {
         if (!self.isActive) return;
-        navLinks.forEach((a) => {
-          a.classList.toggle('active', a.getAttribute('href') === `#${section.id}`);
-        });
+        navLinks.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#${section.id}`));
       },
     });
   });
 
-  // ---- Content panels rotate in 3D as they scroll, swinging with the field ----
+  // Content panels rotate in 3D as they scroll (alternating swing).
   const mm = gsap.matchMedia();
-  mm.add(
-    { desktop: '(min-width:861px)', mobile: '(max-width:860px)' },
-    (ctx) => {
-      const desktop = ctx.conditions.desktop;
-      const ry = desktop ? 17 : 7;
-      const rx = desktop ? 7 : 3;
-      const z = desktop ? -190 : -70;
+  mm.add({ desktop: '(min-width:861px)', mobile: '(max-width:860px)' }, (ctx) => {
+    const desktop = ctx.conditions.desktop;
+    const ry = desktop ? 15 : 6;
+    const rx = desktop ? 6 : 3;
+    const z = desktop ? -170 : -60;
+    sections.forEach((section, i) => {
+      const panel = section.querySelector('.panel, .hero-card');
+      if (!panel) return;
+      const dir = i % 2 ? 1 : -1;
+      const tl = gsap.timeline({ scrollTrigger: { trigger: section, start: 'top bottom', end: 'bottom top', scrub: 0.9 } });
+      tl.fromTo(
+        panel,
+        { rotationY: ry * dir, rotationX: rx, z, y: 30, transformPerspective: 1300 },
+        { rotationY: 0, rotationX: 0, z: 0, y: 0, ease: 'power2.out' }
+      ).to(panel, { rotationY: -ry * 0.8 * dir, rotationX: -rx * 0.7, z: z * 0.8, y: -24, ease: 'power2.in' });
+    });
+  });
 
-      sections.forEach((section, i) => {
-        const panel = section.querySelector('.panel, .hero-card');
-        if (!panel) return;
-        const dir = i % 2 ? 1 : -1;
-        const tl = gsap.timeline({
-          scrollTrigger: { trigger: section, start: 'top bottom', end: 'bottom top', scrub: 0.9 },
-        });
-        tl.fromTo(
-          panel,
-          { rotationY: ry * dir, rotationX: rx, z, y: 34, transformPerspective: 1300 },
-          { rotationY: 0, rotationX: 0, z: 0, y: 0, ease: 'power2.out' }
-        ).to(panel, {
-          rotationY: -ry * 0.8 * dir,
-          rotationX: -rx * 0.7,
-          z: z * 0.8,
-          y: -26,
-          ease: 'power2.in',
-        });
-      });
-    }
-  );
-
-  // Anchor links route through Lenis so smooth scroll and ScrollTrigger agree.
+  // Anchor links route through Lenis.
   document.querySelectorAll('a[href^="#"]').forEach((a) => {
     a.addEventListener('click', (e) => {
       const id = a.getAttribute('href');
@@ -119,9 +120,6 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
   return {
     lenis,
     refresh: () => ScrollTrigger.refresh(),
-    destroy: () => {
-      lenis.destroy();
-      ScrollTrigger.getAll().forEach((t) => t.kill());
-    },
+    destroy: () => { lenis.destroy(); ScrollTrigger.getAll().forEach((t) => t.kill()); },
   };
 }
