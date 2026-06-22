@@ -112,6 +112,52 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
     });
   });
 
+  // ---- Content panels rotate in 3D with the spine as they scroll past ----
+  // Each section's panel swings from a tilted, recessed state into a flat,
+  // readable state at centre, then tilts away as it leaves. The swing direction
+  // follows the spine's rotation for that scene, so panels and spine move
+  // together. Magnitudes are reduced on small screens to protect readability.
+  const mm = gsap.matchMedia();
+  mm.add(
+    { desktop: '(min-width:861px)', mobile: '(max-width:860px)' },
+    (ctx) => {
+      const desktop = ctx.conditions.desktop;
+      const ry = desktop ? 17 : 7;
+      const rx = desktop ? 7 : 3;
+      const z = desktop ? -190 : -70;
+
+      sections.forEach((section, i) => {
+        const panel = section.querySelector('.panel, .hero-card');
+        if (!panel) return;
+        const pose = SCENES[section.dataset.scene] || SCENES.hero;
+        // Swing the same way the spine turns for this scene.
+        const dir = Math.sign(pose.rotY) || (i % 2 ? 1 : -1);
+
+        const tl = gsap.timeline({
+          scrollTrigger: {
+            trigger: section,
+            start: 'top bottom',
+            end: 'bottom top',
+            scrub: 0.9,
+          },
+        });
+        // GSAP owns `transform`; the .reveal class still owns opacity, so the
+        // two never fight over the same property.
+        tl.fromTo(
+          panel,
+          { rotationY: ry * dir, rotationX: rx, z, y: 34, transformPerspective: 1300 },
+          { rotationY: 0, rotationX: 0, z: 0, y: 0, ease: 'power2.out' }
+        ).to(panel, {
+          rotationY: -ry * 0.8 * dir,
+          rotationX: -rx * 0.7,
+          z: z * 0.8,
+          y: -26,
+          ease: 'power2.in',
+        });
+      });
+    }
+  );
+
   // Anchor links route through Lenis so smooth scroll and ScrollTrigger agree.
   document.querySelectorAll('a[href^="#"]').forEach((a) => {
     a.addEventListener('click', (e) => {

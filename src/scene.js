@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { createSpine } from './spine.js';
 
 /**
@@ -29,6 +30,11 @@ export class SpineScene {
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0x070502, 0.028);
+
+    // Image-based lighting so the clearcoat/iridescent bone reads as polished.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
 
     this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
     this.camera.position.set(0, 0, 14);

@@ -120,11 +120,16 @@ export function createSpine() {
   let index = 0;
 
   // Sacrum at the base.
-  const sacrumMat = new THREE.MeshStandardMaterial({
+  const sacrumMat = new THREE.MeshPhysicalMaterial({
     color: BONE_COLOR,
-    roughness: 0.62,
+    roughness: 0.5,
     metalness: 0.04,
-    emissive: HIGHLIGHT.clone().multiplyScalar(0),
+    clearcoat: 0.6,
+    clearcoatRoughness: 0.35,
+    iridescence: 0.35,
+    iridescenceIOR: 1.3,
+    emissive: HIGHLIGHT.clone(),
+    emissiveIntensity: 0,
   });
   const sacrum = buildSacrum(0.8, sacrumMat);
   sacrum.position.y = -1.1;
@@ -138,10 +143,17 @@ export function createSpine() {
       const r = lerp(reg.r1, reg.r0, t); // larger at bottom of region
       const h = reg.h;
 
-      const boneMat = new THREE.MeshStandardMaterial({
+      // Physical material with clearcoat + a touch of iridescence gives the
+      // wet, refractive bone sheen seen in the reference, kept warm and subtle.
+      const boneMat = new THREE.MeshPhysicalMaterial({
         color: BONE_COLOR,
-        roughness: 0.55,
-        metalness: 0.05,
+        roughness: 0.42,
+        metalness: 0.06,
+        clearcoat: 0.7,
+        clearcoatRoughness: 0.3,
+        iridescence: 0.4,
+        iridescenceIOR: 1.32,
+        iridescenceThicknessRange: [120, 420],
         emissive: HIGHLIGHT.clone(),
         emissiveIntensity: 0,
       });

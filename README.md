@@ -49,8 +49,17 @@ npm test
 | Locations / Book (`return`)   | Upright, full column, calm                            |
 | FAQ (`low`)                   | Pulled back and dimmed                                 |
 
-Poses live in `src/scroll.js` (`SCENES`). The spine itself is generated in
-`src/spine.js`; the renderer/camera/lighting and the frame-rate watchdog are in
+As each section scrolls past, its content panel also **rotates in 3D** — swinging
+from a tilted, recessed state into a flat, readable state at centre, then tilting
+away as it leaves. The swing direction follows the spine's rotation for that
+scene, so the panels and the spine move together (inspired by the scroll feel of
+activetheory.net, rebuilt from scratch — no reference code or assets are used).
+The spine surface uses a clearcoat + subtle iridescence physical material for a
+polished, refractive bone look, lit by an image-based environment.
+
+Poses live in `src/scroll.js` (`SCENES`, plus the panel-rotation `matchMedia`
+block). The spine itself is generated in `src/spine.js`; the
+renderer/camera/lighting, image-based lighting and the frame-rate watchdog are in
 `src/scene.js`.
 
 ## Resilience
