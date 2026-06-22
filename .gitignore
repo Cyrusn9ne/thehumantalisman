@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-portable/
+the-human-talisman-preview.html
 .DS_Store
 *.log
 .vite/

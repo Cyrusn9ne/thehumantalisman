@@ -3,12 +3,20 @@
 An immersive, full-screen website for **The Human Talisman** — manual osteopathy,
 high-grade manual therapy, and movement integration in Winnipeg.
 
-The page is built around a procedural **3D anatomical spine** (Three.js) that
-rotates, repositions and changes camera angle as the visitor scrolls. Every
-major section is linked to a distinct visual state of the spine, with the
-written content layered over a full-screen scene. All content, booking links and
-clinical language are carried verbatim from the source HTML — nothing was
-invented.
+The page is built around a **3D anatomical spine** (Three.js) that rotates,
+repositions and changes camera angle as the visitor scrolls. Every major section
+is linked to a distinct visual state of the spine, with the written content
+layered over a full-screen scene. All content, booking links and clinical
+language are carried verbatim from the source HTML — nothing was invented.
+
+## The spine model is required
+
+The spine is a **real model loaded at runtime**, not procedural geometry. Place a
+detailed model at `public/models/spine.glb` (GLB preferred; `.gltf`, `.fbx` and
+`.obj` are also accepted, Draco-compressed GLB supported). See
+[`public/models/README.md`](public/models/README.md) for details. Until a model
+is present the site runs its graceful static fallback — all content and booking
+links work, but no spine is shown. The loader lives in `src/loadSpine.js`.
 
 ## Stack
 
@@ -54,11 +62,9 @@ from a tilted, recessed state into a flat, readable state at centre, then tiltin
 away as it leaves. The swing direction follows the spine's rotation for that
 scene, so the panels and the spine move together (inspired by the scroll feel of
 activetheory.net, rebuilt from scratch — no reference code or assets are used).
-The spine surface uses a clearcoat + subtle iridescence physical material for a
-polished, refractive bone look, lit by an image-based environment.
 
 Poses live in `src/scroll.js` (`SCENES`, plus the panel-rotation `matchMedia`
-block). The spine itself is generated in `src/spine.js`; the
+block). The spine model is loaded and prepared in `src/loadSpine.js`; the
 renderer/camera/lighting, image-based lighting and the frame-rate watchdog are in
 `src/scene.js`.
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { createSpine } from './spine.js';
+import { loadSpine } from './loadSpine.js';
 
 /**
  * SpineScene — owns the WebGL renderer, camera, lighting and the procedural
@@ -41,8 +41,9 @@ export class SpineScene {
 
     this._buildLights();
 
-    this.spine = createSpine();
-    this.scene.add(this.spine);
+    // The spine is a real loaded model, set later via loadModel(). No procedural
+    // geometry is created here.
+    this.spine = null;
 
     // Subtle ground glow plane so the spine reads against the dark field.
     const glowGeo = new THREE.CircleGeometry(9, 48);
@@ -88,6 +89,18 @@ export class SpineScene {
     this.resize();
   }
 
+  /**
+   * Load the real spine model and add it to the scene. Rejects (with
+   * code NO_SPINE_MODEL) when no model file is present, so the caller can show
+   * the static fallback instead of any placeholder geometry.
+   */
+  async loadModel() {
+    const spine = await loadSpine();
+    this.spine = spine;
+    this.scene.add(spine);
+    return spine;
+  }
+
   _buildLights() {
     this.scene.add(new THREE.AmbientLight(0x4a3520, 0.6));
 
@@ -128,6 +141,7 @@ export class SpineScene {
   }
 
   _applyState(dt) {
+    if (!this.spine) return;
     const s = this.state;
     // Pointer parallax — a gentle sway, disabled under reduced motion.
     if (!this.reducedMotion) {
@@ -149,6 +163,7 @@ export class SpineScene {
   }
 
   _updateHighlight() {
+    if (!this.spine) return;
     const regions = this.spine.userData.regions;
     const active = this.state.highlight;
     const strength = this.state.highlightStrength;
