@@ -215,7 +215,29 @@ footer{padding:48px 18px calc(52px + env(safe-area-inset-bottom));border-top:1px
 
 .scroll-progress{position:fixed;left:0;top:0;height:2px;width:0;background:linear-gradient(90deg,var(--ember),var(--gold));z-index:100;box-shadow:0 0 18px rgba(255,192,90,.55)}
 
-/* ---- Custom glowing cursor (desktop, fine pointer only) ---- */
+/* ---- Instagram gallery ---- */
+.ig-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:24px}
+.ig-tile{position:relative;display:block;aspect-ratio:1/1;border-radius:16px;overflow:hidden;border:1px solid var(--line-soft);
+  background:rgba(12,7,4,.5);text-decoration:none;transform:translateZ(0)}
+.ig-tile img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .5s ease,opacity .4s ease;opacity:0}
+.ig-tile img.loaded{opacity:1}
+.ig-tile:hover img,.ig-tile:focus-visible img{transform:scale(1.06)}
+.ig-tile .ig-cap{position:absolute;inset:auto 0 0 0;padding:24px 12px 10px;font-size:12px;color:var(--bone);
+  background:linear-gradient(0deg, rgba(7,5,2,.82), transparent);opacity:0;transition:opacity .3s ease;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ig-tile:hover .ig-cap,.ig-tile:focus-visible .ig-cap{opacity:1}
+.ig-tile .ig-badge{position:absolute;top:8px;right:8px;width:24px;height:24px;color:var(--gold);opacity:.85;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
+.ig-skeleton{background:linear-gradient(100deg, rgba(20,12,6,.5) 30%, rgba(40,24,12,.7) 50%, rgba(20,12,6,.5) 70%);
+  background-size:200% 100%;animation:igShimmer 1.4s ease-in-out infinite;cursor:default}
+@keyframes igShimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.ig-cta{margin-top:22px;text-align:center}
+.ig-note{margin-top:12px;text-align:center;font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--copper)}
+@container (max-width:520px){.ig-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){.ig-skeleton{animation:none}.ig-tile img{transition:none}}
+/* The gallery reads better full-width than as a narrow side panel. */
+@media (min-width:1100px){
+  main > section.section.section--wide > .wrap{max-width:var(--section-w);margin:0 auto}
+}
 html.has-cursor, html.has-cursor *{cursor:none}
 .cursor-dot,.cursor-ring{position:fixed;top:0;left:0;pointer-events:none;z-index:200;border-radius:50%;margin-left:0;margin-top:0;will-change:transform}
 .cursor-dot{width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--gold);box-shadow:0 0 12px var(--amber)}
