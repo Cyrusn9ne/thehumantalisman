@@ -21,14 +21,18 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
 
   const setProgress = (p) => {
     const v = Math.min(1, Math.max(0, p));
-    scene.state.progress = v;
+    // The render loop eases progress toward this target (see scene.js).
+    scene.state.targetProgress = v;
     if (progressBar) progressBar.style.width = `${v * 100}%`;
   };
 
   if (reducedMotion) {
     const onScroll = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
-      setProgress(max > 0 ? window.scrollY / max : 0);
+      const v = max > 0 ? window.scrollY / max : 0;
+      scene.state.targetProgress = v;
+      scene.state.progress = v; // no render loop to ease it
+      if (progressBar) progressBar.style.width = `${v * 100}%`;
       scene.renderOnce();
     };
     onScroll();
@@ -48,6 +52,35 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
   gsap.ticker.add((time) => lenis.raf(time * 1000));
   gsap.ticker.lagSmoothing(0);
   window.__lenis = lenis;
+
+  // Route keyboard scrolling through Lenis so holding an arrow key scrolls
+  // smoothly from the first press instead of fighting native scroll (no glitch).
+  const onKey = (e) => {
+    if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    const tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+    // Don't scroll the page behind an open drawer / mobile menu.
+    if (document.getElementById('drawer')?.classList.contains('open')) return;
+    if (document.getElementById('mobileMenu')?.classList.contains('open')) return;
+
+    const max = document.documentElement.scrollHeight - window.innerHeight;
+    const vh = window.innerHeight;
+    const cur = lenis.targetScroll ?? lenis.scroll ?? window.scrollY;
+    let target = null, duration = 0.5;
+    switch (e.key) {
+      case 'ArrowDown': target = cur + 130; duration = 0.4; break;
+      case 'ArrowUp': target = cur - 130; duration = 0.4; break;
+      case 'PageDown': target = cur + vh * 0.9; break;
+      case 'PageUp': target = cur - vh * 0.9; break;
+      case 'Home': target = 0; duration = 0.8; break;
+      case 'End': target = max; duration = 0.8; break;
+      default: return;
+    }
+    e.preventDefault();
+    lenis.scrollTo(Math.max(0, Math.min(max, target)), { duration, easing: (x) => 1 - Math.pow(1 - x, 3) });
+  };
+  window.addEventListener('keydown', onKey);
 
   // ---- Soft snap: settle onto a pose only when stopped very near one ----
   let snapTimer;
@@ -120,6 +153,6 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
   return {
     lenis,
     refresh: () => ScrollTrigger.refresh(),
-    destroy: () => { lenis.destroy(); ScrollTrigger.getAll().forEach((t) => t.kill()); },
+    destroy: () => { window.removeEventListener('keydown', onKey); lenis.destroy(); ScrollTrigger.getAll().forEach((t) => t.kill()); },
   };
 }

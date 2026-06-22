@@ -35,7 +35,7 @@ export class SpineScene {
     this.godrayPass = null;
     this.gradePass = null;
 
-    this.state = { progress: 0, intro: reducedMotion ? 1 : 0 };
+    this.state = { progress: 0, targetProgress: 0, intro: reducedMotion ? 1 : 0 };
     this._clock = new THREE.Clock();
     this._t = 0;
     this._fpsSamples = [];
@@ -150,6 +150,16 @@ export class SpineScene {
       if (document.hidden) return;
       const dt = Math.min(this._clock.getDelta(), 0.05);
       this._t += dt;
+      // Ease the figure progress toward the scroll target so fast or held
+      // scrolling transitions the figure smoothly and slowly, not in a blur.
+      // A speed cap guarantees a minimum transition time regardless of how fast
+      // the user drags the scrollbar.
+      const k = 1 - Math.exp(-dt / 0.34);
+      let step = (this.state.targetProgress - this.state.progress) * k;
+      const maxStep = 0.5 * dt; // ≤ half the sequence per second
+      if (step > maxStep) step = maxStep;
+      else if (step < -maxStep) step = -maxStep;
+      this.state.progress += step;
       this._renderFrame();
       this._watchPerf(dt);
     };
