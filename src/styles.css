@@ -12,8 +12,8 @@
   --copper:#cc7a2b;
   --ember:#f06b21;
   --shadow:0 10px 40px rgba(0,0,0,.34);
-  --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
-  --sans:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"FrauncesVar","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans:"InterVar",Inter,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --nav-h:78px;
   --section-w:1180px;
@@ -98,7 +98,7 @@ main{position:relative}
 .hero .eyebrow,.hero .hero-copy,.hero .hero-tag{text-shadow:0 2px 22px rgba(0,0,0,.92),0 1px 3px rgba(0,0,0,.95)}
 .hero-metrics .metric{background:rgba(8,5,3,.62);backdrop-filter:blur(8px)}
 .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold)}
-h1,h2,h3{font-family:var(--serif);font-weight:500;letter-spacing:-.02em;line-height:1.02;margin:0 0 .22em}
+h1,h2,h3{font-family:var(--serif);font-weight:480;font-optical-sizing:auto;letter-spacing:-.02em;line-height:1.02;margin:0 0 .22em}
 h1{font-size:clamp(48px,9vw,108px);text-wrap:balance}
 h2{font-size:clamp(34px,5vw,58px)}
 h3{font-size:clamp(24px,3.4vw,34px)}
@@ -214,6 +214,15 @@ footer{padding:48px 18px calc(52px + env(safe-area-inset-bottom));border-top:1px
 }
 
 .scroll-progress{position:fixed;left:0;top:0;height:2px;width:0;background:linear-gradient(90deg,var(--ember),var(--gold));z-index:100;box-shadow:0 0 18px rgba(255,192,90,.55)}
+
+/* ---- Custom glowing cursor (desktop, fine pointer only) ---- */
+html.has-cursor, html.has-cursor *{cursor:none}
+.cursor-dot,.cursor-ring{position:fixed;top:0;left:0;pointer-events:none;z-index:200;border-radius:50%;margin-left:0;margin-top:0;will-change:transform}
+.cursor-dot{width:6px;height:6px;margin:-3px 0 0 -3px;background:var(--gold);box-shadow:0 0 12px var(--amber)}
+.cursor-ring{width:34px;height:34px;margin:-17px 0 0 -17px;border:1px solid rgba(246,171,51,.6);
+  transition:width .25s ease,height .25s ease,margin .25s ease,background .25s ease,border-color .25s ease}
+.cursor-ring.hot{width:54px;height:54px;margin:-27px 0 0 -27px;border-color:rgba(255,192,90,.9);background:rgba(246,171,51,.08)}
+@media (pointer:coarse){.cursor-dot,.cursor-ring{display:none}}
 
 /* ---- Offset content panels to alternating sides, clear central channel ---- */
 /* Each .wrap is a container so its grids collapse to the narrow panel width. */

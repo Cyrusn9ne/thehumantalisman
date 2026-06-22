@@ -1,5 +1,7 @@
 import './styles.css';
+import './fonts.js';
 import { initUI } from './ui.js';
+import { initPolish } from './polish.js';
 
 /**
  * Entry point. Decides which experience to run based on capability:
@@ -39,6 +41,7 @@ function enterStaticFallback(reason) {
 
 async function boot() {
   initUI();
+  initPolish({ reducedMotion });
 
   // Always reveal content even if the 3D path never finishes.
   const safety = setTimeout(hideLoader, 6000);
