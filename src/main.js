@@ -72,24 +72,8 @@ async function boot() {
       },
     });
 
-    // Load the real spine model before starting. If no model file is present,
-    // degrade to the static backdrop with a clear message — never a placeholder.
-    try {
-      await scene.loadModel();
-    } catch (modelErr) {
-      if (modelErr && modelErr.code === 'NO_SPINE_MODEL') {
-        scene.dispose();
-        clearTimeout(safety);
-        console.warn(
-          '[talisman] ' + modelErr.message +
-          '\n[talisman] Add a detailed spine model (GLB preferred) at public/models/spine.glb to enable the 3D experience.'
-        );
-        enterStaticFallback('spine model missing');
-        document.body.dataset.mode = 'no-spine-model';
-        return;
-      }
-      throw modelErr;
-    }
+    // Load the four pose images and build the field before starting.
+    await scene.loadModel();
 
     scroll = initScroll(scene, { reducedMotion });
     scene.start();

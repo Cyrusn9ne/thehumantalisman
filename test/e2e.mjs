@@ -87,9 +87,16 @@ async function run() {
     // Drawer open/close
     let drawerOk = false;
     try {
-      await page.evaluate(() => window.scrollTo({ top: document.getElementById('work').offsetTop, behavior: 'instant' }));
-      await page.waitForTimeout(500);
-      await page.click('[data-service="osteo"]');
+      // Centre the service button (via Lenis when present) and let the panel's
+      // scroll-rotation settle so it's stable to click.
+      await page.evaluate(() => {
+        const el = document.querySelector('[data-service="osteo"]');
+        const y = el.getBoundingClientRect().top + window.scrollY - window.innerHeight / 2;
+        if (window.__lenis) window.__lenis.scrollTo(y, { immediate: true });
+        else window.scrollTo({ top: y, behavior: 'instant' });
+      });
+      await page.waitForTimeout(900);
+      await page.locator('[data-service="osteo"]').click({ timeout: 8000 });
       await page.waitForTimeout(500);
       const open = await page.evaluate(() => document.getElementById('drawer').classList.contains('open'));
       const hasBook = await page.evaluate(() => !!document.querySelector('#drawerBody a[href="#book"]'));

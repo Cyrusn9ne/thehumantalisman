@@ -33,6 +33,15 @@ const dataUri = `data:image/jpeg;base64,${imgB64}`;
 // The base:'./' build may emit the asset as ./brand-bg.jpg or /brand-bg.jpg.
 html = html.replaceAll('./brand-bg.jpg', dataUri).replaceAll('/brand-bg.jpg', dataUri);
 
+// Inline the four pose photographs (loaded at runtime via absolute URLs) so the
+// portable file shows the real field experience offline.
+for (let i = 1; i <= 4; i++) {
+  const p = path.join(root, 'public', 'field', `pose-${i}.webp`);
+  if (!fs.existsSync(p)) continue;
+  const uri = `data:image/webp;base64,${fs.readFileSync(p).toString('base64')}`;
+  html = html.replaceAll(`/field/pose-${i}.webp`, uri);
+}
+
 const finalPath = path.join(root, 'the-human-talisman-preview.html');
 fs.writeFileSync(finalPath, html);
 const kb = (fs.statSync(finalPath).size / 1024).toFixed(0);

@@ -1,13 +1,21 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { loadSpine } from './loadSpine.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { loadPoseTextures, createField } from './field.js';
 
 /**
- * SpineScene — owns the WebGL renderer, camera, lighting and the procedural
- * spine. It holds a mutable `state` object (camera position/target, rotation,
- * highlighted region) that the scroll controller tweens with GSAP; the render
- * loop reads that state every frame. It also self-monitors frame rate and will
- * downgrade quality, then fall back entirely, on weak hardware.
+ * FieldScene — renders the glowing human + electromagnetic field centrepiece.
+ *
+ * A full-screen shader quad cross-fades the four supplied pose photographs as
+ * the visitor scrolls (state.progress 0 → 1), so the figure and field rotate to
+ * each assigned position in order. The image is post-processed with bloom,
+ * vignette and a touch of film grain for a cinematic, top-tier finish.
+ *
+ * Self-monitors frame rate: first drops bloom + pixel ratio, then hands off to
+ * the static fallback if still slow.
  */
 export class SpineScene {
   constructor(canvas, { reducedMotion = false, onLowPerf = () => {} } = {}) {
@@ -19,162 +27,105 @@ export class SpineScene {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
-      alpha: true,
+      alpha: false,
       powerPreference: 'high-performance',
     });
     this.maxDpr = reducedMotion ? 1 : 1.75;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxDpr));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 1.18;
+    this.renderer.setClearColor(0x050301, 1);
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x070502, 0.028);
+    // Orthographic full-screen quad space.
+    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
-    // Image-based lighting so the clearcoat/iridescent bone reads as polished.
-    const pmrem = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmrem.dispose();
+    this.field = null;
+    this.composer = null;
+    this.bloomPass = null;
 
-    this.camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-    this.camera.position.set(0, 0, 14);
-
-    this._buildLights();
-
-    // The spine is a real loaded model, set later via loadModel(). No procedural
-    // geometry is created here.
-    this.spine = null;
-
-    // Subtle ground glow plane so the spine reads against the dark field.
-    const glowGeo = new THREE.CircleGeometry(9, 48);
-    const glowMat = new THREE.MeshBasicMaterial({
-      color: 0x2a1606,
-      transparent: true,
-      opacity: 0.5,
-    });
-    const glow = new THREE.Mesh(glowGeo, glowMat);
-    glow.rotation.x = -Math.PI / 2;
-    glow.position.y = -7;
-    this.scene.add(glow);
-
-    // Mutable state driven by the scroll controller.
-    this.state = {
-      camX: 0, camY: 0, camZ: 14,
-      tgtX: 0, tgtY: 0, tgtZ: 0,
-      rotY: 0,
-      highlight: 'all',
-      highlightStrength: 0.5,
-    };
-    this._target = new THREE.Vector3();
-    this._pointer = { x: 0, y: 0, tx: 0, ty: 0 };
-    this._autoRot = 0;
+    this.state = { progress: 0 };
     this._clock = new THREE.Clock();
+    this._t = 0;
 
-    // Frame-rate watchdog.
     this._fpsSamples = [];
     this._slowFrames = 0;
     this._downgraded = false;
 
     this._onResize = this.resize.bind(this);
     window.addEventListener('resize', this._onResize);
-    if (!reducedMotion) {
-      this._onPointer = (e) => {
-        const t = e.touches ? e.touches[0] : e;
-        this._pointer.tx = (t.clientX / window.innerWidth - 0.5) * 2;
-        this._pointer.ty = (t.clientY / window.innerHeight - 0.5) * 2;
-      };
-      window.addEventListener('pointermove', this._onPointer, { passive: true });
-    }
-
     this.resize();
   }
 
-  /**
-   * Load the real spine model and add it to the scene. Rejects (with
-   * code NO_SPINE_MODEL) when no model file is present, so the caller can show
-   * the static fallback instead of any placeholder geometry.
-   */
+  /** Load the four pose photographs and build the field + post-processing. */
   async loadModel() {
-    const spine = await loadSpine();
-    this.spine = spine;
-    this.scene.add(spine);
-    return spine;
+    const { textures, usingPlaceholders, missing } = await loadPoseTextures();
+    this.usingPlaceholders = usingPlaceholders;
+    if (usingPlaceholders) {
+      console.warn(
+        `[talisman] ${missing} of 4 pose images missing — using labelled ` +
+        'placeholders. Add the real art at public/field/pose-1..4.webp.'
+      );
+    }
+    this.field = createField(textures, { reducedMotion: this.reducedMotion });
+    this.field.setScreenAspect(window.innerWidth / window.innerHeight);
+    this.scene.add(this.field.group);
+    this._buildComposer();
+    return this.field;
   }
 
-  _buildLights() {
-    this.scene.add(new THREE.AmbientLight(0x4a3520, 0.6));
+  _buildComposer() {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const composer = new EffectComposer(this.renderer);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxDpr));
+    composer.setSize(w, h);
+    composer.addPass(new RenderPass(this.scene, this.camera));
 
-    const key = new THREE.DirectionalLight(0xffd9a0, 2.2);
-    key.position.set(5, 8, 8);
-    this.scene.add(key);
+    // Bloom — the core premium glow on the bright amber field.
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(w, h),
+      this.reducedMotion ? 0.6 : 1.05, // strength
+      0.75, // radius
+      0.0 // threshold (lift all of the amber glow)
+    );
+    composer.addPass(this.bloomPass);
 
-    const rim = new THREE.DirectionalLight(0xf06b21, 1.4);
-    rim.position.set(-6, 2, -6);
-    this.scene.add(rim);
+    // Cinematic grade: vignette + subtle film grain in one pass.
+    this.gradePass = new ShaderPass(GRADE_SHADER);
+    this.gradePass.uniforms.uReduced.value = this.reducedMotion ? 1 : 0;
+    composer.addPass(this.gradePass);
 
-    const fill = new THREE.PointLight(0xffc05a, 18, 40, 2);
-    fill.position.set(0, 1, 6);
-    this.scene.add(fill);
-
-    const top = new THREE.SpotLight(0xfff0c8, 4, 30, Math.PI / 5, 0.5, 1.5);
-    top.position.set(0, 12, 4);
-    top.target.position.set(0, 0, 0);
-    this.scene.add(top);
-    this.scene.add(top.target);
+    composer.addPass(new OutputPass());
+    this.composer = composer;
   }
 
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    this.camera.aspect = w / h;
-    // On narrow viewports widen the FOV so the full column stays framed.
-    this.camera.fov = w < 720 ? 54 : w < 1100 ? 46 : 42;
-    this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxDpr));
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxDpr));
+      this.composer.setSize(w, h);
+    }
+    if (this.bloomPass) this.bloomPass.setSize(w, h);
+    if (this.field) this.field.setScreenAspect(w / h);
+    if (this.gradePass) this.gradePass.uniforms.uResolution.value.set(w, h);
   }
 
-  /** Render a single frame (used for the static reduced-motion path). */
+  _renderFrame() {
+    if (!this.field) return;
+    this.field.setProgress(this.state.progress);
+    this.field.update(this._t);
+    if (this.gradePass) this.gradePass.uniforms.uTime.value = this._t;
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
   renderOnce() {
-    this._applyState(0);
-    this.renderer.render(this.scene, this.camera);
-  }
-
-  _applyState(dt) {
-    if (!this.spine) return;
-    const s = this.state;
-    // Pointer parallax — a gentle sway, disabled under reduced motion.
-    if (!this.reducedMotion) {
-      this._pointer.x += (this._pointer.tx - this._pointer.x) * 0.04;
-      this._pointer.y += (this._pointer.ty - this._pointer.y) * 0.04;
-      this._autoRot += dt * 0.12;
-    }
-    const parX = this._pointer.x * 0.6;
-    const parY = this._pointer.y * 0.4;
-
-    this.camera.position.set(s.camX + parX, s.camY - parY, s.camZ);
-    this._target.set(s.tgtX, s.tgtY, s.tgtZ);
-    this.camera.lookAt(this._target);
-
-    this.spine.rotation.y = s.rotY + Math.sin(this._autoRot) * 0.12;
-    this.spine.rotation.z = this._pointer.x * 0.02;
-
-    this._updateHighlight();
-  }
-
-  _updateHighlight() {
-    if (!this.spine) return;
-    const regions = this.spine.userData.regions;
-    const active = this.state.highlight;
-    const strength = this.state.highlightStrength;
-    for (const name of Object.keys(regions)) {
-      const on = active === 'all' || active === name;
-      const targetI = on ? strength : 0.04;
-      for (const part of regions[name]) {
-        const mat = part.material;
-        mat.emissiveIntensity += (targetI - mat.emissiveIntensity) * 0.08;
-      }
-    }
+    this._renderFrame();
   }
 
   _watchPerf(dt) {
@@ -187,12 +138,13 @@ export class SpineScene {
     if (avg < 32) {
       this._slowFrames++;
       if (this._slowFrames === 1) {
-        // First strike: drop pixel ratio and exposure to recover.
+        // First strike: drop bloom + pixel ratio to recover.
         this.maxDpr = 1;
         this.renderer.setPixelRatio(1);
+        if (this.composer) this.composer.setPixelRatio(1);
+        if (this.bloomPass) this.bloomPass.strength = 0.4;
         this._fpsSamples = [];
       } else {
-        // Still slow: hand control back to the static fallback.
         this._downgraded = true;
         this.onLowPerf();
       }
@@ -211,8 +163,8 @@ export class SpineScene {
       this._raf = requestAnimationFrame(loop);
       if (document.hidden) return;
       const dt = Math.min(this._clock.getDelta(), 0.05);
-      this._applyState(dt);
-      this.renderer.render(this.scene, this.camera);
+      this._t += dt;
+      this._renderFrame();
       this._watchPerf(dt);
     };
     this._raf = requestAnimationFrame(loop);
@@ -227,7 +179,8 @@ export class SpineScene {
     this.disposed = true;
     this.stop();
     window.removeEventListener('resize', this._onResize);
-    if (this._onPointer) window.removeEventListener('pointermove', this._onPointer);
+    if (this.field) this.field.dispose();
+    if (this.composer) this.composer.dispose();
     this.scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) {
@@ -238,3 +191,39 @@ export class SpineScene {
     this.renderer.dispose();
   }
 }
+
+// Vignette + animated film grain, applied after bloom.
+const GRADE_SHADER = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uTime: { value: 0 },
+    uReduced: { value: 0 },
+    uResolution: { value: new THREE.Vector2(1, 1) },
+  },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+  `,
+  fragmentShader: /* glsl */ `
+    precision highp float;
+    varying vec2 vUv;
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    uniform float uReduced;
+    uniform vec2 uResolution;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233))) * 43758.5453); }
+    void main(){
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
+      // Vignette.
+      vec2 q = vUv - 0.5;
+      float vig = smoothstep(1.05, 0.4, length(q) * 1.2);
+      col *= mix(0.72, 1.0, vig);
+      // Subtle film grain.
+      if(uReduced < 0.5){
+        float g = hash(vUv * uResolution + uTime * 60.0);
+        col += (g - 0.5) * 0.035;
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
