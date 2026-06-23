@@ -23,6 +23,7 @@ import * as THREE from 'three';
 
 // Order requested by the client. Normalisation (scale / offset / heart) keeps
 // the heart, feet, body scale and surrounding field centred consistently.
+// Absolute paths — the site is served from a domain root (see DEPLOY.md).
 const POSES = [
   { url: '/field/pose-3.webp', name: 'front', scale: 1.0, offset: [0.0, 0.0], heart: [0.5, 0.455] },
   { url: '/field/pose-1.webp', name: 'side', scale: 1.0, offset: [0.0, 0.0], heart: [0.5, 0.45] },
