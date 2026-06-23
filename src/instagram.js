@@ -10,7 +10,8 @@ export function initInstagram() {
   // No server when opened as a local file (the portable preview) — show the CTA.
   if (location.protocol === 'file:') { fallback(grid); return; }
 
-  fetch('/api/instagram', { headers: { accept: 'application/json' } })
+  // Reads a static JSON file refreshed by a scheduled job (free, no server).
+  fetch('/instagram.json', { headers: { accept: 'application/json' } })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
     .then((data) => {
       const items = (data && data.items) || [];

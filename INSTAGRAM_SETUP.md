@@ -31,35 +31,35 @@ the browser. Until a token is configured the section shows sample tiles plus the
   https://graph.instagram.com/me?fields=id,username&access_token=LONG_LIVED_TOKEN
   ```
 
-## Configure the deployment
+## Configure it — the free way (recommended, no server)
 
-Set these as **environment variables / secrets** on your host (never commit them):
+The site reads a static `instagram.json`. A scheduled **GitHub Action**
+(`.github/workflows/instagram-feed.yml`) fetches your posts and writes that file,
+so you need **no serverless host** — it works on any free static host.
 
-```
-IG_ACCESS_TOKEN=<your long-lived token>
-IG_USER_ID=<your instagram user id>
-```
+1. In the GitHub repo: **Settings → Secrets and variables → Actions → New
+   repository secret**, add two secrets:
+   - `IG_ACCESS_TOKEN` = your long-lived token
+   - `IG_USER_ID` = your instagram user id
+2. The workflow runs every 6 hours and on demand. Scheduled runs fire once the
+   workflow is on the repo's **default branch**; until then use **Actions → Refresh
+   Instagram feed → Run workflow**.
+3. Host the site free on **Cloudflare Pages**, **Netlify**, or **GitHub Pages**
+   (all free; Cloudflare/Netlify allow commercial use). Each rebuilds when the
+   Action commits the refreshed `instagram.json`.
 
-The feed needs a host that runs serverless functions:
+Locally, `npm run dev` serves `/instagram.json` automatically (sample data unless
+you export the two env vars in your shell).
 
-- **Vercel** — `api/instagram.mjs` works as-is. Add the env vars in Project
-  Settings → Environment Variables.
-- **Netlify** — point a function at the same logic, or use
-  `netlify/functions/instagram.mjs`:
-  ```js
-  import { fetchInstagram } from '../../api/_core.mjs';
-  export const handler = async () => ({
-    statusCode: 200,
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(await fetchInstagram(process.env)),
-  });
-  ```
-  and add a redirect `/api/instagram -> /.netlify/functions/instagram`.
-- **Cloudflare Pages** — adapt to a Pages Function using `env` instead of
-  `process.env`.
+> Image links from Instagram's CDN expire after a while, which is why the job
+> refreshes every few hours. Permalinks never expire.
 
-Locally, `npm run dev` serves `/api/instagram` already (sample data unless the
-env vars are set in your shell).
+## Alternative — serverless function
+
+If you'd rather not commit a JSON file, `api/instagram.mjs` is a ready
+serverless endpoint (Vercel works as-is; Netlify/Cloudflare need a thin wrapper).
+Point the front-end fetch at `/api/instagram` instead of `/instagram.json`. The
+env vars are the same. (The free static route above needs none of this.)
 
 ## Keep the token fresh
 

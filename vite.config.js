@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite';
 import { fetchInstagram } from './api/_core.mjs';
 
-// Serves /api/instagram during `vite dev` / `vite preview` using the same logic
-// as the deployed serverless function (sample data until a token is configured).
+// Serves /instagram.json during `vite dev` / `vite preview` using the same logic
+// as the scheduled job (sample data until a token is configured). In production a
+// real public/instagram.json (written by the GitHub Action) is served statically.
 function instagramDevApi() {
   const handler = async (req, res) => {
     const out = await fetchInstagram(process.env);
@@ -11,8 +12,8 @@ function instagramDevApi() {
   };
   return {
     name: 'instagram-dev-api',
-    configureServer(server) { server.middlewares.use('/api/instagram', handler); },
-    configurePreviewServer(server) { server.middlewares.use('/api/instagram', handler); },
+    configureServer(server) { server.middlewares.use('/instagram.json', handler); },
+    configurePreviewServer(server) { server.middlewares.use('/instagram.json', handler); },
   };
 }
 

@@ -1,0 +1,45 @@
+name: Refresh Instagram feed
+
+# Fetches the latest posts and commits public/instagram.json. 100% free:
+# no server needed — the site reads the static JSON. Add IG_ACCESS_TOKEN and
+# IG_USER_ID as repository secrets (Settings → Secrets and variables → Actions).
+#
+# Note: scheduled runs only fire from the repository's DEFAULT branch. You can
+# always trigger it manually from any branch via the "Run workflow" button.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # every 6 hours (Instagram CDN image links are short-lived)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instagram-feed
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch latest posts
+        env:
+          IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+        run: node scripts/fetch-ig.mjs
+      - name: Commit if changed
+        run: |
+          if ! git diff --quiet -- public/instagram.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add public/instagram.json
+            git commit -m "chore: refresh Instagram feed [skip ci]"
+            git push
+          else
+            echo "No changes."
+          fi
