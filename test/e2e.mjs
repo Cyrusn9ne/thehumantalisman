@@ -26,7 +26,7 @@ function attachConsole(page, bucket) {
   page.on('requestfailed', (r) => {
     const u = r.url();
     // Ignore the OG image preload (absolute prod URL, not served in dev).
-    if (u.includes('thehumantalisman.ca')) return;
+    if (u.includes('thehumantalisman.com')) return;
     // Probing for the spine model / draco decoder is expected to miss until the
     // real model is supplied — that is the documented "no model yet" state.
     if (u.includes('/models/') || u.includes('/draco/')) return;

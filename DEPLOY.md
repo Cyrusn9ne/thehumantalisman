@@ -16,9 +16,9 @@ every push, serves at the site root (no path juggling). Netlify works identicall
 
 That's it. Every push to the connected branch rebuilds and deploys automatically.
 
-## Custom domain (thehumantalisman.ca)
+## Custom domain (thehumantalisman.com)
 
-Cloudflare Pages → your project → **Custom domains** → add `thehumantalisman.ca`
+Cloudflare Pages → your project → **Custom domains** → add `thehumantalisman.com`
 and follow the DNS prompt. Because the site is served at the domain root, no code
 changes are needed.
 
