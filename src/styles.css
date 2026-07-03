@@ -38,14 +38,17 @@ button{cursor:pointer}
 /* ---- Full-screen background field: 3D canvas + brand backdrop + vignette ---- */
 .bg-media{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
 #scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+/* The brand photo is only fetched when the no-3d fallback actually shows it —
+   never on the WebGL path, where it would sit invisibly behind the canvas. */
 .bg-image{position:absolute;inset:-6%;
+  background-size:cover;background-position:center 28%;background-repeat:no-repeat;
+  filter:saturate(1.04) brightness(.82);opacity:0;transform-origin:center 30%;
+  transition:opacity .6s ease}
+html.no-3d .bg-image{
   background-image:
     linear-gradient(180deg, rgba(4,2,1,.78) 0%, rgba(6,3,1,.5) 18%, rgba(6,3,1,.62) 42%, rgba(6,3,1,.86) 100%),
     radial-gradient(circle at center 24%, rgba(255,183,74,.14), transparent 34%),
-    url('/brand-bg.jpg');
-  background-size:cover;background-position:center 28%;background-repeat:no-repeat;
-  filter:saturate(1.04) brightness(.82);opacity:.16;transform-origin:center 30%;
-  transition:opacity .6s ease}
+    url('/brand-bg.jpg')}
 .bg-vignette{position:absolute;inset:0;background:
   radial-gradient(circle at center 30%, transparent 16%, rgba(7,5,2,.1) 50%, rgba(7,5,2,.62) 78%, rgba(7,5,2,.94) 100%),
   linear-gradient(180deg, rgba(7,5,2,.5) 0%, rgba(7,5,2,0) 14%, rgba(7,5,2,.1) 46%, rgba(7,5,2,.6) 76%, rgba(7,5,2,.92) 100%)}
@@ -99,12 +102,16 @@ header.nav{position:sticky;top:0;z-index:40;background:rgba(7,5,2,.62);backdrop-
 main{position:relative}
 .hero{min-height:100svh;display:flex;align-items:center;justify-content:center;padding:calc(var(--nav-h) + 42px) 18px 72px}
 /* Hero is transparent so the glowing figure reads as the hero; text carries its
-   own shadow for legibility over the energy field. */
-.hero-card{max-width:900px;text-align:center;padding:36px 28px 28px;border:1px solid transparent;border-radius:32px;background:transparent}
+   own shadow for legibility over the energy field. Left-anchored editorial at
+   every size — mobile is designed, not a compressed centre block. */
+.hero{justify-content:flex-start}
+.hero-card{max-width:640px;text-align:left;padding:36px 28px 28px;border:1px solid transparent;border-radius:32px;background:transparent}
+.hero-copy{margin:0;max-width:38ch}
+.hero-tag{margin-left:0;max-width:40ch}
+.hero-actions{justify-content:flex-start}
 .hero-card::after{display:none}
 .hero h1{text-shadow:0 3px 40px rgba(0,0,0,.85),0 1px 8px rgba(0,0,0,.9)}
-.hero .eyebrow,.hero .hero-copy,.hero .hero-tag{text-shadow:0 2px 22px rgba(0,0,0,.92),0 1px 3px rgba(0,0,0,.95)}
-.hero-metrics .metric{background:rgba(8,5,3,.62);backdrop-filter:blur(8px)}
+.hero .eyebrow,.hero .hero-copy,.hero .hero-tag,.hero-metrics{text-shadow:0 2px 22px rgba(0,0,0,.92),0 1px 3px rgba(0,0,0,.95)}
 .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold)}
 h1,h2,h3{font-family:var(--serif);font-weight:480;font-optical-sizing:auto;letter-spacing:-.02em;line-height:1.02;margin:0 0 .22em}
 h1{font-size:clamp(48px,9vw,108px);text-wrap:balance}
@@ -113,20 +120,23 @@ h3{font-size:clamp(24px,3.4vw,34px)}
 .hero-copy{font-size:clamp(18px,2.2vw,22px);max-width:34ch;margin:0 auto;color:var(--bone)}
 .hero-tag{margin:16px auto 0;max-width:34ch;color:var(--bone-soft);font-family:var(--serif);font-style:italic;font-size:clamp(17px,2vw,20px)}
 .hero-actions{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:28px}
-.hero-metrics{margin-top:28px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-.metric{padding:16px;border-radius:18px;border:1px solid var(--line-soft);background:rgba(10,6,3,.5)}
-.metric strong{display:block;font-family:var(--serif);font-size:22px;font-weight:500;color:var(--bone)}
-.metric span{display:block;color:var(--bone-soft);font-size:13px}
+/* Practice index — hairline editorial rows, not stat cards. */
+.hero-metrics{margin-top:36px;display:grid;grid-template-columns:1fr;gap:0;max-width:560px}
+.metric{display:flex;align-items:baseline;gap:16px;padding:13px 0;border:0;border-radius:0;background:none;border-top:1px solid var(--line-soft)}
+.metric strong{font-family:var(--serif);font-size:19px;font-weight:500;color:var(--bone);white-space:nowrap}
+.metric span{color:var(--bone-soft);font-size:13.5px;line-height:1.5}
 
 .section{padding:84px 18px;position:relative}
 .wrap{max-width:var(--section-w);margin:0 auto}
 .panel{background:linear-gradient(180deg, rgba(15,9,5,.82), rgba(9,6,3,.76));border:1px solid rgba(246,171,51,.12);border-radius:28px;padding:28px;box-shadow:var(--shadow);backdrop-filter:blur(9px)}
 .lead{max-width:68ch;color:var(--bone-soft);font-size:clamp(16px,1.8vw,18px);line-height:1.68;margin:0}
-.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
-.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
-.conditions .item,.cred .item{padding:22px;border-radius:22px;border:1px solid var(--line-soft);background:rgba(10,6,3,.5)}
-.item h3{font-size:22px;margin-bottom:10px}
-.item p{margin:0;color:var(--bone-soft);font-size:15px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 30px;counter-reset:idx}
+.grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 30px;counter-reset:idx}
+/* Editorial index rows — hairlines and numerals, not tiled cards. */
+.conditions .item,.cred .item{padding:18px 0 16px;border:0;border-radius:0;background:none;border-top:1px solid var(--line-soft);counter-increment:idx}
+.conditions .item h3::before,.cred .item h3::before{content:"0" counter(idx);display:block;font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--copper);margin-bottom:10px}
+.item h3{font-size:21px;margin-bottom:10px}
+.item p{margin:0;color:var(--bone-soft);font-size:15px;line-height:1.6}
 .split-head{display:flex;justify-content:space-between;align-items:end;gap:18px;margin-bottom:26px;flex-wrap:wrap}
 .services{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:26px}
 .service{position:relative;padding:24px;border-radius:24px;border:1px solid var(--line);background:linear-gradient(180deg, rgba(21,12,6,.78), rgba(12,7,4,.78));overflow:hidden;min-height:248px;display:flex;flex-direction:column;justify-content:space-between}
@@ -164,9 +174,11 @@ footer{padding:48px 18px calc(52px + env(safe-area-inset-bottom));border-top:1px
 .footer-nav{display:flex;flex-wrap:wrap;gap:16px 20px}
 .footer-nav a{text-decoration:none;color:var(--bone-soft);font-size:14px}
 .footer-nav a:hover{color:var(--bone)}
-.bookbar{position:fixed;left:0;right:0;bottom:0;z-index:35;padding:12px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg, rgba(7,5,2,0), rgba(7,5,2,.92));transform:translateY(120%);transition:transform .28s ease}
+/* Mobile-only floating booking pill — the desktop nav already carries Book. */
+.bookbar{position:fixed;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:35;transform:translateY(140%);transition:transform .28s ease}
 .bookbar.show{transform:translateY(0)}
-.bookbar .btn{width:100%}
+.bookbar .btn{width:100%;box-shadow:0 14px 40px rgba(0,0,0,.55),0 4px 14px rgba(246,171,51,.25)}
+@media (min-width:861px){.bookbar{display:none}}
 .backdrop{position:fixed;inset:0;background:rgba(4,2,1,.64);backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s ease;z-index:49}
 .backdrop.open{opacity:1;pointer-events:auto}
 .drawer{position:fixed;top:0;right:0;z-index:50;width:min(470px,96vw);height:100dvh;background:linear-gradient(180deg, rgba(15,9,5,.98), rgba(8,5,3,.98));border-left:1px solid var(--line);transform:translateX(104%);transition:transform .28s ease;padding:26px 24px 32px;overflow:auto}
@@ -204,8 +216,9 @@ footer{padding:48px 18px calc(52px + env(safe-area-inset-bottom));border-top:1px
   .mobile-menu.open{transform:translateY(0)}
   .mobile-menu nav{display:grid;gap:12px}
   .mobile-menu a{text-decoration:none;padding:12px 2px;color:var(--bone-soft)}
-  .hero-card{padding:28px 20px 24px}
-  .hero-metrics{grid-template-columns:1fr;gap:10px}
+  .hero-card{padding:24px 2px 20px}
+  .hero h1{font-size:clamp(52px,15vw,72px)}
+  .metric{flex-direction:column;gap:2px;padding:11px 0}
   .services,.locations,.grid-3,.grid-4,.steps{grid-template-columns:1fr}
   .split-head{align-items:start}
   .drawer{top:auto;bottom:0;left:0;right:0;width:100%;height:auto;max-height:88dvh;border-left:none;border-top:1px solid var(--line);border-radius:24px 24px 0 0;transform:translateY(103%)}

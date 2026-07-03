@@ -155,14 +155,16 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
     });
   });
 
-  // Content panels rotate in 3D as they scroll (alternating swing).
+  // Content panels ease through a restrained 3D swing as they scroll. The hero
+  // stays anchored — the field carries the opening motion, not the type.
   const mm = gsap.matchMedia();
   mm.add({ desktop: '(min-width:861px)', mobile: '(max-width:860px)' }, (ctx) => {
     const desktop = ctx.conditions.desktop;
-    const ry = desktop ? 15 : 6;
-    const rx = desktop ? 6 : 3;
-    const z = desktop ? -170 : -60;
+    const ry = desktop ? 9 : 4;
+    const rx = desktop ? 4 : 2;
+    const z = desktop ? -110 : -40;
     sections.forEach((section, i) => {
+      if (section.dataset.scene === 'hero') return;
       const panel = section.querySelector('.panel, .hero-card');
       if (!panel) return;
       const dir = i % 2 ? 1 : -1;
