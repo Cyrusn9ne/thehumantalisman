@@ -14,6 +14,34 @@ gsap.registerPlugin(ScrollTrigger);
  */
 const POSE_POINTS = [0, 1 / 3, 2 / 3, 1];
 
+/**
+ * Spinal-axis narrative. Each data-scene maps to a state of the anatomical
+ * system: how present the axis is, how open the joint spaces are
+ * (decompression), the fascial web, the nerve pulses, the column's rotation,
+ * and how far the body-field recedes behind it (dim).
+ *
+ *   hero        surface tension — quiet field, no axis
+ *   transition  the axis is sensed
+ *   spine       the work — vertebral structure enters
+ *   gait        a session — joint space opens (decompression)
+ *   heart       approach — fascial web + nervous-system regulation
+ *   human       about — human presence returns, warmth
+ *   return      locations / instagram — scene simplifies
+ *   low         faq — almost still
+ *   settle      book — systems settle, light gathers on the axis
+ */
+const AXIS_SCENES = {
+  hero: { visibility: 0, decompression: 0, fascia: 0, pulses: 0, rotY: -0.4, dim: 0 },
+  transition: { visibility: 0.22, decompression: 0, fascia: 0, pulses: 0.08, rotY: -0.1, dim: 0.12 },
+  spine: { visibility: 1, decompression: 0.12, fascia: 0.12, pulses: 0.25, rotY: 0.4, dim: 0.55 },
+  gait: { visibility: 1, decompression: 0.9, fascia: 0.28, pulses: 0.35, rotY: 0.95, dim: 0.6 },
+  heart: { visibility: 0.92, decompression: 0.5, fascia: 1, pulses: 0.55, rotY: 1.6, dim: 0.6 },
+  human: { visibility: 0.4, decompression: 0.3, fascia: 0.3, pulses: 0.25, rotY: 2.1, dim: 0.2 },
+  return: { visibility: 0.3, decompression: 0.1, fascia: 0.1, pulses: 0.12, rotY: 2.6, dim: 0.12 },
+  low: { visibility: 0.18, decompression: 0, fascia: 0.05, pulses: 0.08, rotY: 2.9, dim: 0.08 },
+  settle: { visibility: 0.85, decompression: 0.04, fascia: 0.18, pulses: 0.7, rotY: 3.6, dim: 0.3 },
+};
+
 export function initScroll(scene, { reducedMotion = false } = {}) {
   const sections = Array.from(document.querySelectorAll('[data-scene]'));
   const progressBar = document.getElementById('scrollProgress');
@@ -112,6 +140,18 @@ export function initScroll(scene, { reducedMotion = false } = {}) {
         if (!self.isActive) return;
         navLinks.forEach((a) => a.classList.toggle('active', a.getAttribute('href') === `#${section.id}`));
       },
+    });
+  });
+
+  // Spinal-axis narrative: scrub each section's axis state in as it reaches
+  // the reading zone, so the anatomical system moves with the story.
+  sections.forEach((section) => {
+    const pose = AXIS_SCENES[section.dataset.scene];
+    if (!pose) return;
+    gsap.to(scene.axisState, {
+      ...pose,
+      ease: 'power2.inOut',
+      scrollTrigger: { trigger: section, start: 'top 85%', end: 'top 30%', scrub: 0.8 },
     });
   });
 

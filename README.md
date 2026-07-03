@@ -26,6 +26,26 @@ missing, a clearly-labelled placeholder is generated so the motion is still
 visible. The engine lives in `src/field.js`; the renderer, post-processing and
 frame-rate watchdog are in `src/scene.js`.
 
+## The spinal axis
+
+Layered over the body field is the central anatomical system (`src/axis.js`):
+an abstract spinal axis — luminous core, seventeen vertebral rings on an
+S-curve, a fascial web, and nerve pulses (the single muted-cobalt accent).
+Each section's `data-scene` drives its state via `AXIS_SCENES` in
+`src/scroll.js`, telling the story of entering the body:
+
+| Scene | Story beat | System state |
+|---|---|---|
+| `hero` | surface tension | quiet field, no axis |
+| `transition` | the axis is sensed | faint presence |
+| `spine` | the work | vertebral structure enters |
+| `gait` | a session | joint space opens (decompression) |
+| `heart` | approach | fascial web + nerve regulation |
+| `human` | about | human presence returns |
+| `return` | locations / instagram | scene simplifies |
+| `low` | faq | almost still |
+| `settle` | book | systems settle, light gathers |
+
 ### Graphics enhancements
 
 - **UnrealBloom** post-processing for the amber glow

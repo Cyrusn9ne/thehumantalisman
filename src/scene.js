@@ -6,6 +6,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { loadPoseTextures, createField } from './field.js';
+import { SpineAxis } from './axis.js';
 
 /**
  * FieldScene — single sticky canvas hosting the figure sequence + the full
@@ -27,15 +28,22 @@ export class SpineScene {
     this.renderer.setClearColor(0x050301, 1);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    // Perspective camera for the 3D spinal axis; the body-field quad renders in
+    // clip space and fills the screen regardless of camera.
+    this.camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera.position.set(0.4, 1.3, 11);
+    this.camera.lookAt(0, 0, 0);
 
     this.field = null;
+    this.axis = null;
     this.composer = null;
     this.bloomPass = null;
     this.godrayPass = null;
     this.gradePass = null;
 
     this.state = { progress: 0, targetProgress: 0, intro: reducedMotion ? 1 : 0 };
+    // Spinal-axis narrative parameters, tweened by the scroll system.
+    this.axisState = { visibility: 0, decompression: 0, fascia: 0, pulses: 0, rotY: 0, dim: 0 };
     this._clock = new THREE.Clock();
     this._t = 0;
     this._fpsSamples = [];
@@ -57,6 +65,14 @@ export class SpineScene {
     this.field.setScreenAspect(window.innerWidth / window.innerHeight);
     this.field.setIntro(this.reducedMotion ? 1 : 0);
     this.scene.add(this.field.group);
+
+    this.axis = new SpineAxis({ reducedMotion: this.reducedMotion });
+    this.scene.add(this.axis.group);
+    if (this.reducedMotion) {
+      // Static cinematic frame: axis present with fascia, no motion layers.
+      Object.assign(this.axisState, { visibility: 0.75, decompression: 0.35, fascia: 0.4, pulses: 0, rotY: 0.4, dim: 0.35 });
+    }
+
     this._buildComposer();
     return this.field;
   }
@@ -96,6 +112,10 @@ export class SpineScene {
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
+    this.camera.aspect = w / h;
+    // Widen the view slightly on narrow screens so the axis stays framed.
+    this.camera.fov = w < 720 ? 52 : 42;
+    this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     if (this.composer) { this.composer.setPixelRatio(dpr); this.composer.setSize(w, h); }
@@ -105,11 +125,16 @@ export class SpineScene {
     if (this.field) this.field.setScreenAspect(w / h);
   }
 
-  _renderFrame() {
+  _renderFrame(dt = 0) {
     if (!this.field) return;
     this.field.setProgress(this.state.progress);
     this.field.setIntro(this.state.intro);
+    this.field.setDim(this.axisState.dim);
     this.field.update(this._t);
+    if (this.axis) {
+      Object.assign(this.axis.state, this.axisState);
+      this.axis.update(this._t, dt);
+    }
     if (this.gradePass) {
       this.gradePass.uniforms.uTime.value = this._t;
       this.gradePass.uniforms.uShift.value = this.field.getActivity();
@@ -137,6 +162,7 @@ export class SpineScene {
         if (this.composer) this.composer.setPixelRatio(1);
         if (this.bloomPass) this.bloomPass.strength = 0.5;
         if (this.godrayPass) this.godrayPass.uniforms.uStrength.value = 0;
+        if (this.axis) this.axis.simplify();
         this._fpsSamples = [];
       } else { this._downgraded = true; this.onLowPerf(); }
     } else { this._slowFrames = 0; }
@@ -160,7 +186,7 @@ export class SpineScene {
       if (step > maxStep) step = maxStep;
       else if (step < -maxStep) step = -maxStep;
       this.state.progress += step;
-      this._renderFrame();
+      this._renderFrame(dt);
       this._watchPerf(dt);
     };
     this._raf = requestAnimationFrame(loop);
@@ -173,6 +199,7 @@ export class SpineScene {
     this.stop();
     window.removeEventListener('resize', this._onResize);
     if (this.field) this.field.dispose();
+    if (this.axis) this.axis.dispose();
     if (this.composer) this.composer.dispose();
     this.renderer.dispose();
   }

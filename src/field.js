@@ -117,6 +117,7 @@ const QUAD_FRAG = /* glsl */ `
   uniform float uDissolve;  // 0 solid -> 1 gone
   uniform float uHeartGlow; // additive heart light
   uniform float uDOF;       // transition blur amount
+  uniform float uDim;       // recede while the spinal axis leads
   uniform float uTime;
   uniform float uReduced;
   ${NOISE}
@@ -171,6 +172,7 @@ const QUAD_FRAG = /* glsl */ `
     vec3 heartCol = vec3(1.0, 0.78, 0.4) * heart;
 
     vec3 outc = col * vis + ember + heartCol;
+    outc *= mix(1.0, 0.45, uDim);
     gl_FragColor = vec4(outc, 1.0);
   }
 `;
@@ -245,6 +247,7 @@ export function createField(textures, meta, { reducedMotion, renderer }) {
     uDissolve: { value: 0 },
     uHeartGlow: { value: 0.0 },
     uDOF: { value: 0 },
+    uDim: { value: 0 },
     uTime: { value: 0 },
     uReduced: { value: reducedMotion ? 1 : 0 },
   };
@@ -394,10 +397,11 @@ export function createField(textures, meta, { reducedMotion, renderer }) {
 
   function getActivity() { return pU.uActivity.value; }
   function getHeartGlow() { return quadU.uHeartGlow.value; }
+  function setDim(v) { quadU.uDim.value = Math.max(0, Math.min(1, v)); }
 
   return {
     group, setProgress, setScreenAspect, setIntro, update, heartScreenPos, dispose,
-    getActivity, getHeartGlow,
+    getActivity, getHeartGlow, setDim,
     get activeIndex() { return activeIndex; },
   };
 }
